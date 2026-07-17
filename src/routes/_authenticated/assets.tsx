@@ -243,13 +243,13 @@ function AssetDialog({
       purchase_cost: form.purchase_cost ? Number(form.purchase_cost) : null,
       vendor_id: form.vendor_id || null,
       warranty_expiry: form.warranty_expiry || null,
-      status: form.status as AssetRow["status"],
+      status: form.status as "available" | "assigned" | "reserved" | "repair" | "lost" | "disposed" | "retired",
       location: form.location || null,
       remarks: form.remarks || null,
     };
     const res = editing
       ? await supabase.from("assets").update(payload).eq("id", editing.id)
-      : await supabase.from("assets").insert(payload);
+      : await supabase.from("assets").insert({ ...payload, asset_name: payload.asset_name });
     setSaving(false);
     if (res.error) return toast.error(res.error.message);
     toast.success(editing ? "Asset updated" : "Asset created");
