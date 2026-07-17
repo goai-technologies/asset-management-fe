@@ -1,12 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import { Boxes, Users, CheckCircle2, Wrench, Archive, UserCheck } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Boxes, Users, CheckCircle2, Wrench, Archive, UserCheck, Plus, UserPlus, ArrowLeftRight, FileText, Clock, AlertTriangle, ShieldAlert } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { shortDate } from "@/lib/format";
+import { Button } from "@/components/ui/button";
+import { MockDB } from "@/lib/mock-db";
+import { toast } from "sonner";
+import { AssetDialog } from "@/components/asset-dialog";
+import { EmployeeDialog } from "@/components/employee-dialog";
+import { AssignDialog } from "@/components/assign-dialog";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -15,58 +20,56 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 const CHART_COLORS = ["#2563EB", "#0891B2", "#059669", "#D97706", "#DC2626", "#7C3AED", "#DB2777"];
 
 function Dashboard() {
-  const { data: stats } = useQuery({
-    queryKey: ["dashboard-stats"],
-    queryFn: async () => {
-      const [assets, employees] = await Promise.all([
-        supabase.from("assets").select("id,status,category_id,categories(category_name)"),
-        supabase.from("employees").select("id", { count: "exact", head: true }),
-      ]);
-      const rows = assets.data ?? [];
-      const byStatus: Record<string, number> = {};
-      const byCategory: Record<string, number> = {};
-      for (const a of rows) {
-        byStatus[a.status] = (byStatus[a.status] ?? 0) + 1;
-        const cat = (a.categories as { category_name?: string } | null)?.category_name ?? "Uncategorized";
-        byCategory[cat] = (byCategory[cat] ?? 0) + 1;
-      }
-      return {
-        totalAssets: rows.length,
-        totalEmployees: employees.count ?? 0,
-        byStatus,
-        byCategory,
-      };
-    },
-  });
+  const [refreshTick, setRefreshTick] = useState(0);
 
-  const { data: recent } = useQuery({
-    queryKey: ["dashboard-recent"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("assignments")
-        .select("id, assigned_date, returned_date, status, assets(asset_name, asset_code), employees(name)")
-        .order("created_at", { ascending: false })
-        .limit(6);
-      return data ?? [];
-    },
-  });
+  const triggerRefresh = () => setRefreshTick(t => t + 1);
+
+  const stats = MockDB.getDashboardStats();
+  const recent = MockDB.getRecentAssignments(6);
+  const assets = MockDB.getAssets();
+  
+  // Calculate specific widgets based on MockDB
+  const lowStock = Object.entries(stats.byCategory).map(([cat, count]) => ({ cat, count })).filter(c => c.count < 3);
+  
+  const expiringWarranty = assets
+    .filter(a => a.warranty_expiry)
+    .map(a => {
+      const days = Math.floor((new Date(a.warranty_expiry!).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
+      return { ...a, days };
+    })
+    .filter(a => a.days > 0 && a.days <= 90)
+    .sort((a, b) => a.days - b.days)
+    .slice(0, 3);
+
+  const [addAssetOpen, setAddAssetOpen] = useState(false);
+  const [addEmployeeOpen, setAddEmployeeOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
 
   const cards = [
-    { label: "Total Assets", value: stats?.totalAssets ?? 0, icon: Boxes, tint: "text-primary bg-primary/10" },
-    { label: "Assigned", value: stats?.byStatus.assigned ?? 0, icon: UserCheck, tint: "text-info bg-info/10" },
-    { label: "Available", value: stats?.byStatus.available ?? 0, icon: CheckCircle2, tint: "text-success bg-success/10" },
-    { label: "Under Repair", value: stats?.byStatus.repair ?? 0, icon: Wrench, tint: "text-warning-foreground bg-warning/20" },
-    { label: "Retired", value: (stats?.byStatus.retired ?? 0) + (stats?.byStatus.disposed ?? 0), icon: Archive, tint: "text-muted-foreground bg-muted" },
-    { label: "Employees", value: stats?.totalEmployees ?? 0, icon: Users, tint: "text-primary bg-primary/10" },
+    { label: "Total Assets", value: stats.totalAssets, icon: Boxes, tint: "text-primary bg-primary/10" },
+    { label: "Assigned", value: stats.byStatus.assigned || 0, icon: UserCheck, tint: "text-info bg-info/10" },
+    { label: "Available", value: stats.byStatus.available || 0, icon: CheckCircle2, tint: "text-success bg-success/10" },
+    { label: "Under Repair", value: stats.byStatus.repair || 0, icon: Wrench, tint: "text-warning-foreground bg-warning/20" },
+    { label: "Retired", value: (stats.byStatus.retired || 0) + (stats.byStatus.disposed || 0), icon: Archive, tint: "text-muted-foreground bg-muted" },
+    { label: "Employees", value: stats.totalEmployees, icon: Users, tint: "text-primary bg-primary/10" },
   ];
 
-  const categoryData = Object.entries(stats?.byCategory ?? {}).map(([name, value]) => ({ name, value }));
-  const statusData = Object.entries(stats?.byStatus ?? {}).map(([name, value]) => ({ name: name.replace(/\b\w/g, (c) => c.toUpperCase()), value }));
+  const categoryData = Object.entries(stats.byCategory).map(([name, value]) => ({ name, value }));
+  const statusData = Object.entries(stats.byStatus).map(([name, value]) => ({ name: name.replace(/\b\w/g, (c) => c.toUpperCase()), value }));
 
   return (
-    <div>
-      <PageHeader title="Dashboard" description="Overview of asset inventory, allocation, and activity." />
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <PageHeader title="Dashboard" description="Overview of asset inventory, allocation, and activity." />
+        <div className="flex flex-wrap gap-2">
+          <Button variant="default" onClick={() => setAddAssetOpen(true)}><Plus className="h-4 w-4 mr-2"/> Add Asset</Button>
+          <Button variant="outline" onClick={() => setAddEmployeeOpen(true)}><UserPlus className="h-4 w-4 mr-2"/> Add Employee</Button>
+          <Button variant="outline" onClick={() => setAssignOpen(true)}><ArrowLeftRight className="h-4 w-4 mr-2"/> Assign</Button>
+          <Button variant="outline" onClick={() => toast.success("Report generation started")}><FileText className="h-4 w-4 mr-2"/> Report</Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         {cards.map((c) => (
           <Card key={c.label}>
             <CardContent className="p-4">
@@ -84,65 +87,121 @@ function Dashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle>Assets by Category</CardTitle></CardHeader>
-          <CardContent className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={categoryData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="name" stroke="var(--muted-foreground)" fontSize={12} />
-                <YAxis stroke="var(--muted-foreground)" fontSize={12} allowDecimals={false} />
-                <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8 }} />
-                <Bar dataKey="value" fill="var(--primary)" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <CardContent className="h-[300px]">
+            {categoryData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={categoryData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="name" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip cursor={{ fill: 'var(--muted)' }} contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }} />
+                  <Bar dataKey="value" fill="var(--primary)" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted-foreground text-sm">No assets yet</div>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader><CardTitle>Assets by Status</CardTitle></CardHeader>
-          <CardContent className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={statusData} dataKey="value" nameKey="name" innerRadius={45} outerRadius={80} paddingAngle={2}>
-                  {statusData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                </Pie>
-                <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8 }} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+          <CardContent className="h-[300px]">
+            {statusData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={statusData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={80} paddingAngle={5}>
+                    {statusData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8 }} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted-foreground text-sm">No assets yet</div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader><CardTitle>Recent Assignments</CardTitle></CardHeader>
-        <CardContent>
-          {(recent ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">No recent activity yet.</p>
-          ) : (
-            <ul className="divide-y">
-              {(recent ?? []).map((r) => {
-                const asset = r.assets as { asset_name?: string; asset_code?: string } | null;
-                const emp = r.employees as { name?: string } | null;
-                return (
-                  <li key={r.id} className="py-3 flex items-center justify-between gap-4">
-                    <div>
-                      <div className="font-medium">{asset?.asset_name} <span className="text-xs text-muted-foreground">({asset?.asset_code})</span></div>
-                      <div className="text-xs text-muted-foreground">
-                        Assigned to <span className="font-medium">{emp?.name ?? "—"}</span> · {shortDate(r.assigned_date)}
-                        {r.returned_date && <> · Returned {shortDate(r.returned_date)}</>}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-2">
+          <CardHeader><CardTitle className="flex items-center gap-2"><Clock className="h-5 w-5 text-muted-foreground"/> Recent Activity</CardTitle></CardHeader>
+          <CardContent>
+            {recent.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No recent activity yet.</p>
+            ) : (
+              <div className="relative border-l-2 border-muted ml-3 space-y-6 pb-4">
+                {recent.map((r) => (
+                  <div key={r.id} className="relative pl-6">
+                    <div className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-2 border-background bg-primary"></div>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <div className="font-medium text-sm">
+                          {r.assets?.asset_name || "Unknown Asset"} 
+                          <span className="text-muted-foreground font-normal">
+                            {r.status === 'returned' ? ' returned by ' : ' assigned to '}
+                          </span> 
+                          {r.employees?.name || "Unknown Employee"}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {shortDate(r.assigned_date)}
+                        </div>
                       </div>
+                      <StatusBadge status={r.status} kind="assignment" />
                     </div>
-                    <StatusBadge status={r.status} kind="assignment" />
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-base"><ShieldAlert className="h-4 w-4 text-warning-foreground" /> Warranty Expiring Soon</CardTitle></CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {expiringWarranty.length > 0 ? expiringWarranty.map(item => (
+                  <div key={item.asset_code} className="flex justify-between items-center text-sm border-b last:border-0 pb-2 last:pb-0">
+                    <div>
+                      <div className="font-medium">{item.asset_name}</div>
+                      <div className="text-xs text-muted-foreground">{item.asset_code}</div>
+                    </div>
+                    <div className="text-warning-foreground font-medium text-xs bg-warning/10 px-2 py-1 rounded">
+                      In {item.days} days
+                    </div>
+                  </div>
+                )) : <div className="text-sm text-muted-foreground">No warranties expiring soon.</div>}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-base"><AlertTriangle className="h-4 w-4 text-destructive" /> Low Stock Assets</CardTitle></CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {lowStock.length > 0 ? lowStock.map(item => (
+                  <div key={item.cat} className="flex justify-between items-center text-sm border-b last:border-0 pb-2 last:pb-0">
+                    <div className="font-medium">{item.cat}</div>
+                    <div className={`font-bold ${item.count === 0 ? 'text-destructive' : 'text-warning-foreground'}`}>
+                      {item.count} available
+                    </div>
+                  </div>
+                )) : <div className="text-sm text-muted-foreground">All categories are well-stocked.</div>}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+      
+      {/* Dialogs */}
+      <AssetDialog open={addAssetOpen} onOpenChange={setAddAssetOpen} editing={null} onSaved={triggerRefresh} />
+      <EmployeeDialog open={addEmployeeOpen} onOpenChange={setAddEmployeeOpen} onSaved={triggerRefresh} />
+      <AssignDialog open={assignOpen} onOpenChange={setAssignOpen} onSaved={triggerRefresh} />
     </div>
   );
 }

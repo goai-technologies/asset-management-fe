@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   LayoutDashboard, Boxes, Users, ArrowLeftRight, Tags, Building2,
-  FileBarChart, Settings, LogOut, Menu, User as UserIcon,
+  FileBarChart, Settings, LogOut, Menu, User as UserIcon, Bell, ShieldCheck, History, Wrench
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession, useRoles } from "@/hooks/use-auth";
@@ -32,9 +32,11 @@ const NAV = [
   { to: "/assets", label: "Assets", icon: Boxes, roles: ["administrator","it_team","employee"] },
   { to: "/employees", label: "Employees", icon: Users, roles: ["administrator","it_team"] },
   { to: "/assignments", label: "Assignments", icon: ArrowLeftRight, roles: ["administrator","it_team"] },
-  { to: "/categories", label: "Categories", icon: Tags, roles: ["administrator","it_team"] },
+  { to: "/repairs", label: "Repairs", icon: Wrench, roles: ["administrator","it_team"] },
+  { to: "/warranty", label: "Warranty", icon: ShieldCheck, roles: ["administrator","it_team"] },
   { to: "/vendors", label: "Vendors", icon: Building2, roles: ["administrator","it_team"] },
   { to: "/reports", label: "Reports", icon: FileBarChart, roles: ["administrator","it_team"] },
+  { to: "/audit-logs", label: "Audit Logs", icon: History, roles: ["administrator"] },
   { to: "/settings", label: "Settings", icon: Settings, roles: ["administrator"] },
 ] as const;
 
@@ -134,6 +136,10 @@ function TopBar({ onMenu, user, roleLabel }: { onMenu: () => void; user: { email
         </div>
       </div>
       <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground">
+          <Bell className="h-5 w-5" />
+          <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-destructive"></span>
+        </Button>
         <Badge variant="secondary" className="hidden sm:inline-flex">{roleLabel}</Badge>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -148,7 +154,10 @@ function TopBar({ onMenu, user, roleLabel }: { onMenu: () => void; user: { email
               <div className="text-xs text-muted-foreground mt-0.5">{roleLabel}</div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem disabled><UserIcon className="h-4 w-4 mr-2" />Profile</DropdownMenuItem>
+            <DropdownMenuItem disabled><UserIcon className="h-4 w-4 mr-2" />My Profile</DropdownMenuItem>
+            <DropdownMenuItem disabled><Boxes className="h-4 w-4 mr-2" />My Assets</DropdownMenuItem>
+            <DropdownMenuItem disabled><Settings className="h-4 w-4 mr-2" />Settings</DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
               <LogOut className="h-4 w-4 mr-2" />Sign out
             </DropdownMenuItem>
