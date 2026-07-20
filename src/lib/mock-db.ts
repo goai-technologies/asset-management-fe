@@ -2,7 +2,16 @@ import { getAssetImageStorage } from "@/lib/asset-images";
 
 export type Category = { id: string; category_name: string };
 export type Vendor = { id: string; vendor_name: string };
-export type Employee = { id: string; name: string; email: string; department?: string; designation?: string; location?: string; };
+export type Employee = {
+  id: string;
+  employee_code: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  department?: string | null;
+  designation?: string | null;
+  location?: string | null;
+};
 export type Asset = {
   id: string;
   asset_code: string;
@@ -102,8 +111,8 @@ const DEFAULT_DB: DBSchema = {
     { id: "v3", vendor_name: "Amazon Business" },
   ],
   employees: [
-    { id: "e1", name: "John Doe", email: "john@example.com", department: "Engineering", designation: "Developer", location: "New York" },
-    { id: "e2", name: "Jane Smith", email: "jane@example.com", department: "Design", designation: "UI/UX Designer", location: "San Francisco" },
+    { id: "e1", employee_code: "EMP-1001", name: "John Doe", email: "john@example.com", phone: "+1 555-0101", department: "Engineering", designation: "Developer", location: "New York" },
+    { id: "e2", employee_code: "EMP-1002", name: "Jane Smith", email: "jane@example.com", phone: "+1 555-0102", department: "Design", designation: "UI/UX Designer", location: "San Francisco" },
   ],
   assets: [
     {
@@ -135,10 +144,19 @@ function getDb(): DBSchema {
     return DEFAULT_DB;
   }
   const parsed = JSON.parse(data) as DBSchema;
+  let needsSave = false;
   if (!parsed.repairs) {
     parsed.repairs = [];
-    saveDb(parsed);
+    needsSave = true;
   }
+  parsed.employees = parsed.employees.map((e, i) => {
+    if (!e.employee_code) {
+      needsSave = true;
+      return { ...e, employee_code: `EMP-${1001 + i}` };
+    }
+    return e;
+  });
+  if (needsSave) saveDb(parsed);
   return parsed;
 }
 
@@ -152,6 +170,7 @@ function saveDb(db: DBSchema) {
 // Generate unique ID
 export const genId = () => Math.random().toString(36).substring(2, 9);
 export const genAssetCode = (cat: string) => `${cat.substring(0,2).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+export const genEmployeeCode = () => `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
 
 function isActiveAsset(asset: Asset): boolean {
   return !asset.isDeleted;
@@ -259,7 +278,11 @@ export const MockDB = {
 
   addEmployee: (employee: Omit<Employee, "id">) => {
     const db = getDb();
-    const newEmp: Employee = { ...employee, id: genId() };
+    const newEmp: Employee = {
+      ...employee,
+      id: genId(),
+      employee_code: employee.employee_code || genEmployeeCode(),
+    };
     db.employees.push(newEmp);
     saveDb(db);
     return newEmp;
@@ -414,11 +437,30 @@ export const MockDB = {
       byCategory[catName] = (byCategory[catName] || 0) + 1;
     });
 
+    const activeAssetIds = new Set(db.assets.filter(isActiveAsset).map((a) => a.id));
+    const openRepairTickets = db.repairs.filter(
+      (r) => r.status === "in_progress" && activeAssetIds.has(r.asset_id),
+    ).length;
+
     return {
       totalAssets: db.assets.filter(isActiveAsset).length,
       totalEmployees: db.employees.length,
       byStatus,
       byCategory,
+      openRepairTickets,
     };
-  }
+  },
+
+  getOpenRepairs: (): RepairRow[] => {
+    const db = getDb();
+    const activeAssetIds = new Set(db.assets.filter(isActiveAsset).map((a) => a.id));
+    return db.repairs
+      .filter((r) => r.status === "in_progress" && activeAssetIds.has(r.asset_id))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .map((r) => ({
+        ...r,
+        assets: db.assets.find((a) => a.id === r.asset_id) || null,
+        vendors: db.vendors.find((v) => v.id === r.vendor_id) || null,
+      }));
+  },
 };

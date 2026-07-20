@@ -92,7 +92,9 @@ export function AssignDialog({
               <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
               <SelectContent>
                 {employees.map(e => (
-                  <SelectItem key={e.id} value={e.id}>{e.name} ({e.department || 'No Dept'})</SelectItem>
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.name} ({e.employee_code}){e.department ? ` · ${e.department}` : ""}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

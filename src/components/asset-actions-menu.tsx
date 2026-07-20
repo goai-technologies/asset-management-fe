@@ -1,5 +1,5 @@
 import {
-  Eye, Pencil, History, Wrench, RefreshCw, Trash2, MoreHorizontal,
+  Eye, Pencil, History, Wrench, RefreshCw, Trash2, MoreHorizontal, ArrowLeftRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +20,7 @@ export function AssetActionsMenu({
   onViewDetails,
   onViewHistory,
   onEdit,
+  onAssign,
   onUnassign,
   onDelete,
   onRepairHistory,
@@ -29,11 +30,12 @@ export function AssetActionsMenu({
   onViewDetails: () => void;
   onViewHistory: () => void;
   onEdit: () => void;
+  onAssign: () => void;
   onUnassign: () => void;
   onDelete: () => void;
   onRepairHistory: () => void;
 }) {
-  const hasOwner = !!asset.assigned_employee_id;
+  const isAssigned = !!asset.assigned_employee_id;
 
   return (
     <DropdownMenu>
@@ -50,16 +52,21 @@ export function AssetActionsMenu({
             <Pencil className="h-4 w-4 mr-2" /> Edit Asset
           </DropdownMenuItem>
         )}
-        {canManage && hasOwner && (
+        {canManage && !isAssigned && (
+          <DropdownMenuItem onClick={onAssign}>
+            <ArrowLeftRight className="h-4 w-4 mr-2" /> Assign Asset
+          </DropdownMenuItem>
+        )}
+        {canManage && isAssigned && (
           <DropdownMenuItem onClick={onUnassign}>
             <RefreshCw className="h-4 w-4 mr-2" /> Unassign Asset
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onClick={onViewHistory}>
-          <History className="h-4 w-4 mr-2" /> Assignment History
-        </DropdownMenuItem>
         <DropdownMenuItem onClick={onRepairHistory}>
           <Wrench className="h-4 w-4 mr-2" /> Repair History
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onViewHistory}>
+          <History className="h-4 w-4 mr-2" /> Assignment History
         </DropdownMenuItem>
 
         {canManage ? <DropdownMenuSeparator /> : null}

@@ -1,18 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import { Boxes, Users, CheckCircle2, Wrench, Archive, UserCheck, Plus, UserPlus, ArrowLeftRight, FileText, Clock, AlertTriangle, ShieldAlert } from "lucide-react";
+import { Boxes, Users, CheckCircle2, Wrench, Archive, UserCheck, Clock, ShieldAlert, ClipboardList } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { shortDate, dateTime } from "@/lib/format";
-import { Button } from "@/components/ui/button";
 import { MockDB } from "@/lib/mock-db";
 import { useMockDbRefresh } from "@/hooks/use-mock-db-refresh";
-import { toast } from "sonner";
-import { AssetDialog } from "@/components/asset-dialog";
-import { EmployeeDialog } from "@/components/employee-dialog";
-import { AssignDialog } from "@/components/assign-dialog";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -21,15 +15,13 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 const CHART_COLORS = ["#2563EB", "#0891B2", "#059669", "#D97706", "#DC2626", "#7C3AED", "#DB2777"];
 
 function Dashboard() {
-  const { refresh: triggerRefresh } = useMockDbRefresh();
+  useMockDbRefresh();
 
   const stats = MockDB.getDashboardStats();
   const recent = MockDB.getRecentAssignments(6);
   const assets = MockDB.getAssets();
-  
-  // Calculate specific widgets based on MockDB
-  const lowStock = Object.entries(stats.byCategory).map(([cat, count]) => ({ cat, count })).filter(c => c.count < 3);
-  
+  const openRepairs = MockDB.getOpenRepairs();
+
   const expiringWarranty = assets
     .filter(a => a.warranty_expiry)
     .map(a => {
@@ -38,35 +30,26 @@ function Dashboard() {
     })
     .filter(a => a.days > 0 && a.days <= 90)
     .sort((a, b) => a.days - b.days)
-    .slice(0, 3);
-
-  const [addAssetOpen, setAddAssetOpen] = useState(false);
-  const [addEmployeeOpen, setAddEmployeeOpen] = useState(false);
-  const [assignOpen, setAssignOpen] = useState(false);
+    .slice(0, 5);
 
   const cards = [
     { label: "Total Assets", value: stats.totalAssets, icon: Boxes, tint: "text-primary bg-primary/10" },
-    { label: "Assigned", value: stats.byStatus.assigned || 0, icon: UserCheck, tint: "text-info bg-info/10" },
-    { label: "Available", value: stats.byStatus.available || 0, icon: CheckCircle2, tint: "text-success bg-success/10" },
+    { label: "Assigned Assets", value: stats.byStatus.assigned || 0, icon: UserCheck, tint: "text-info bg-info/10" },
+    { label: "Available Assets", value: stats.byStatus.available || 0, icon: CheckCircle2, tint: "text-success bg-success/10" },
     { label: "Under Repair", value: stats.byStatus.repair || 0, icon: Wrench, tint: "text-warning-foreground bg-warning/20" },
     { label: "Retired", value: (stats.byStatus.retired || 0) + (stats.byStatus.disposed || 0), icon: Archive, tint: "text-muted-foreground bg-muted" },
     { label: "Employees", value: stats.totalEmployees, icon: Users, tint: "text-primary bg-primary/10" },
   ];
 
   const categoryData = Object.entries(stats.byCategory).map(([name, value]) => ({ name, value }));
-  const statusData = Object.entries(stats.byStatus).map(([name, value]) => ({ name: name.replace(/\b\w/g, (c) => c.toUpperCase()), value }));
+  const statusData = Object.entries(stats.byStatus).map(([name, value]) => ({
+    name: name === "repair" ? "Under Repair" : name.replace(/\b\w/g, (c) => c.toUpperCase()),
+    value,
+  }));
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <PageHeader title="Dashboard" description="Overview of asset inventory, allocation, and activity." />
-        <div className="flex flex-wrap gap-2">
-          <Button variant="default" onClick={() => setAddAssetOpen(true)}><Plus className="h-4 w-4 mr-2"/> Add Asset</Button>
-          <Button variant="outline" onClick={() => setAddEmployeeOpen(true)}><UserPlus className="h-4 w-4 mr-2"/> Add Employee</Button>
-          <Button variant="outline" onClick={() => setAssignOpen(true)}><ArrowLeftRight className="h-4 w-4 mr-2"/> Assign</Button>
-          <Button variant="outline" onClick={() => toast.success("Report generation started")}><FileText className="h-4 w-4 mr-2"/> Report</Button>
-        </div>
-      </div>
+      <PageHeader title="Dashboard" description="Overview of asset inventory, allocation, and activity." />
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
         {cards.map((c) => (
@@ -167,7 +150,11 @@ function Dashboard() {
 
         <div className="space-y-6">
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-base"><ShieldAlert className="h-4 w-4 text-warning-foreground" /> Warranty Expiring Soon</CardTitle></CardHeader>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ShieldAlert className="h-4 w-4 text-warning-foreground" /> Warranty Expiring Soon
+              </CardTitle>
+            </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 {expiringWarranty.length > 0 ? expiringWarranty.map(item => (
@@ -186,27 +173,30 @@ function Dashboard() {
           </Card>
 
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-base"><AlertTriangle className="h-4 w-4 text-destructive" /> Low Stock Assets</CardTitle></CardHeader>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center justify-between text-base">
+                <span className="flex items-center gap-2">
+                  <ClipboardList className="h-4 w-4 text-muted-foreground" /> Open Repair Tickets
+                </span>
+                <span className="text-sm font-bold text-primary">{stats.openRepairTickets}</span>
+              </CardTitle>
+            </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {lowStock.length > 0 ? lowStock.map(item => (
-                  <div key={item.cat} className="flex justify-between items-center text-sm border-b last:border-0 pb-2 last:pb-0">
-                    <div className="font-medium">{item.cat}</div>
-                    <div className={`font-bold ${item.count === 0 ? 'text-destructive' : 'text-warning-foreground'}`}>
-                      {item.count} available
+                {openRepairs.length > 0 ? openRepairs.slice(0, 5).map((repair) => (
+                  <div key={repair.id} className="flex justify-between items-center text-sm border-b last:border-0 pb-2 last:pb-0">
+                    <div>
+                      <div className="font-medium">{repair.assets?.asset_name ?? "Unknown Asset"}</div>
+                      <div className="text-xs text-muted-foreground font-mono">{repair.assets?.asset_code}</div>
                     </div>
+                    <StatusBadge status={repair.status} kind="repair" />
                   </div>
-                )) : <div className="text-sm text-muted-foreground">All categories are well-stocked.</div>}
+                )) : <div className="text-sm text-muted-foreground">No open repair tickets.</div>}
               </div>
             </CardContent>
           </Card>
         </div>
       </div>
-      
-      {/* Dialogs */}
-      <AssetDialog open={addAssetOpen} onOpenChange={setAddAssetOpen} editing={null} onSaved={triggerRefresh} />
-      <EmployeeDialog open={addEmployeeOpen} onOpenChange={setAddEmployeeOpen} onSaved={triggerRefresh} />
-      <AssignDialog open={assignOpen} onOpenChange={setAssignOpen} onSaved={triggerRefresh} />
     </div>
   );
 }

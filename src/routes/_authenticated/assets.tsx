@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
-import { Plus, Search, Download, Trash2, Upload, ArrowLeftRight, Boxes, FileDown, History } from "lucide-react";
+import { Plus, Search, Download, Trash2, ArrowLeftRight, Boxes, FileDown, History, UserPlus } from "lucide-react";
 import { useSession, useRoles } from "@/hooks/use-auth";
 import { useMockDbRefresh } from "@/hooks/use-mock-db-refresh";
 import { PageHeader } from "@/components/page-header";
@@ -19,6 +19,7 @@ import { currencyINR, shortDate, dateTime } from "@/lib/format";
 import { downloadCSV } from "@/lib/csv";
 import { MockDB, AssetRow } from "@/lib/mock-db";
 import { AssetDialog } from "@/components/asset-dialog";
+import { EmployeeDialog } from "@/components/employee-dialog";
 import { AssignDialog } from "@/components/assign-dialog";
 import { UnassignAssetDialog } from "@/components/unassign-asset-dialog";
 import { DeleteAssetDialog } from "@/components/delete-asset-dialog";
@@ -42,6 +43,7 @@ function AssetsPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [employeeOpen, setEmployeeOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [unassignOpen, setUnassignOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -131,16 +133,34 @@ function AssetsPage() {
         title="Assets"
         description="All company assets with lifecycle status, assignments, and warranty info."
         actions={
-          <>
-            <Button variant="outline" onClick={exportCSV} title="Export CSV"><Download className="h-4 w-4 mr-2" />CSV</Button>
-            <Button variant="outline" onClick={() => toast.success("Mock: PDF Exported")} title="Export PDF"><FileDown className="h-4 w-4 mr-2" />PDF</Button>
-            <Button variant="outline" onClick={() => toast.success("Mock: Opened Import Modal")}><Upload className="h-4 w-4 mr-2" />Import</Button>
-            {canManage && (
+          canManage ? (
+            <>
               <Button onClick={() => { setEditing(null); setDialogOpen(true); }}>
                 <Plus className="h-4 w-4 mr-2" />Add Asset
               </Button>
-            )}
-          </>
+              <Button variant="outline" onClick={() => setEmployeeOpen(true)}>
+                <UserPlus className="h-4 w-4 mr-2" />Add Employee
+              </Button>
+              <Button variant="outline" onClick={() => setAssignOpen(true)}>
+                <ArrowLeftRight className="h-4 w-4 mr-2" />Assign Asset
+              </Button>
+              <Button variant="outline" onClick={exportCSV} title="Export CSV">
+                <Download className="h-4 w-4 mr-2" />CSV
+              </Button>
+              <Button variant="outline" onClick={() => toast.success("Mock: PDF Exported")} title="Export PDF">
+                <FileDown className="h-4 w-4 mr-2" />PDF
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={exportCSV} title="Export CSV">
+                <Download className="h-4 w-4 mr-2" />CSV
+              </Button>
+              <Button variant="outline" onClick={() => toast.success("Mock: PDF Exported")} title="Export PDF">
+                <FileDown className="h-4 w-4 mr-2" />PDF
+              </Button>
+            </>
+          )
         }
       />
 
@@ -242,6 +262,7 @@ function AssetsPage() {
                         onViewDetails={() => openAssetDetails(a)}
                         onViewHistory={() => openAssetDetails(a, "history")}
                         onEdit={() => { setEditing(a); setDialogOpen(true); }}
+                        onAssign={() => { setAssignAssetId(a.id); setAssignOpen(true); }}
                         onUnassign={() => { setUnassignAsset(a); setUnassignOpen(true); }}
                         onDelete={() => handleSoftDelete(a)}
                         onRepairHistory={() => {
@@ -271,6 +292,14 @@ function AssetsPage() {
         />
       )}
       
+      {canManage && (
+        <EmployeeDialog
+          open={employeeOpen}
+          onOpenChange={setEmployeeOpen}
+          onSaved={triggerRefresh}
+        />
+      )}
+
       {/* Assign Dialog */}
       <AssignDialog 
         open={assignOpen} 

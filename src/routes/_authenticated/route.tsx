@@ -2,8 +2,7 @@ import { createFileRoute, Outlet, redirect, Link, useNavigate, useRouterState } 
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
-  LayoutDashboard, Boxes, Users, ArrowLeftRight, Tags, Building2,
-  FileBarChart, Settings, LogOut, Menu, User as UserIcon, Bell, ShieldCheck, History, Wrench
+  LayoutDashboard, Boxes, LogOut, Menu, User as UserIcon, Bell, Settings,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession, useRoles } from "@/hooks/use-auth";
@@ -30,14 +29,6 @@ export const Route = createFileRoute("/_authenticated")({
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["administrator","it_team","employee"] },
   { to: "/assets", label: "Assets", icon: Boxes, roles: ["administrator","it_team","employee"] },
-  { to: "/employees", label: "Employees", icon: Users, roles: ["administrator","it_team","employee"] },
-  { to: "/assignments", label: "Assignments", icon: ArrowLeftRight, roles: ["administrator","it_team"] },
-  { to: "/repairs", label: "Repairs", icon: Wrench, roles: ["administrator","it_team"] },
-  { to: "/warranty", label: "Warranty", icon: ShieldCheck, roles: ["administrator","it_team"] },
-  { to: "/vendors", label: "Vendors", icon: Building2, roles: ["administrator","it_team"] },
-  { to: "/reports", label: "Reports", icon: FileBarChart, roles: ["administrator","it_team"] },
-  { to: "/audit-logs", label: "Audit Logs", icon: History, roles: ["administrator"] },
-  { to: "/settings", label: "Settings", icon: Settings, roles: ["administrator"] },
 ] as const;
 
 function AuthedLayout() {

@@ -14,33 +14,56 @@ export function EmployeeDialog({
   onSaved: () => void;
 }) {
   const [form, setForm] = useState({
-    name: "", email: "", department: "", designation: "", location: "",
+    employee_code: "",
+    name: "",
+    email: "",
+    phone: "",
+    department: "",
+    designation: "",
+    location: "",
   });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setForm({ name: "", email: "", department: "", designation: "", location: "" });
+      setForm({
+        employee_code: "",
+        name: "",
+        email: "",
+        phone: "",
+        department: "",
+        designation: "",
+        location: "",
+      });
     }
   }, [open]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    
-    if (!form.name || !form.email) {
-      toast.error("Please fill in required fields (Name, Email)");
+
+    if (!form.employee_code.trim() || !form.name.trim() || !form.email.trim()) {
+      toast.error("Please fill in required fields (Employee ID, Name, Email)");
       setSaving(false);
       return;
     }
 
     try {
-      MockDB.addEmployee(form);
+      MockDB.addEmployee({
+        employee_code: form.employee_code.trim(),
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim() || null,
+        department: form.department.trim() || null,
+        designation: form.designation.trim() || null,
+        location: form.location.trim() || null,
+      });
       toast.success("Employee added successfully");
       onSaved();
       onOpenChange(false);
-    } catch (error: any) {
-      toast.error(error.message || "An error occurred");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "An error occurred";
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -48,16 +71,37 @@ export function EmployeeDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[520px]">
         <DialogHeader><DialogTitle>Add Employee</DialogTitle></DialogHeader>
-        <form onSubmit={submit} className="space-y-4 pt-4">
-          <Field label="Full Name" required><Input value={form.name} required onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-          <Field label="Email" required><Input type="email" value={form.email} required onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-          <Field label="Department"><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} /></Field>
-          <Field label="Designation"><Input value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} /></Field>
-          <Field label="Location"><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></Field>
-          
-          <DialogFooter className="pt-4">
+        <form onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          <Field label="Employee ID" required>
+            <Input
+              placeholder="e.g. EMP-1003"
+              value={form.employee_code}
+              required
+              onChange={(e) => setForm({ ...form, employee_code: e.target.value })}
+            />
+          </Field>
+          <Field label="Employee Name" required>
+            <Input value={form.name} required onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </Field>
+          <Field label="Email" required>
+            <Input type="email" value={form.email} required onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </Field>
+          <Field label="Phone">
+            <Input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </Field>
+          <Field label="Department">
+            <Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} />
+          </Field>
+          <Field label="Designation">
+            <Input value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} />
+          </Field>
+          <Field label="Location" className="sm:col-span-2">
+            <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+          </Field>
+
+          <DialogFooter className="sm:col-span-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Add Employee"}</Button>
           </DialogFooter>
@@ -67,9 +111,9 @@ export function EmployeeDialog({
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({ label, required, className, children }: { label: string; required?: boolean; className?: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-2">
+    <div className={`space-y-2 ${className ?? ""}`}>
       <Label>{label}{required && <span className="text-destructive"> *</span>}</Label>
       {children}
     </div>
