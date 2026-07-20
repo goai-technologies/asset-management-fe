@@ -24,6 +24,7 @@ import { UnassignAssetDialog } from "@/components/unassign-asset-dialog";
 import { DeleteAssetDialog } from "@/components/delete-asset-dialog";
 import { AssetActionsMenu, type AssetDetailsTab } from "@/components/asset-actions-menu";
 import { AssetOwnerDisplay } from "@/components/asset-owner-display";
+import { AssetImageGallery } from "@/components/asset-images/asset-image-gallery";
 import { RepairHistoryDialog } from "@/components/repair-history-dialog";
 
 export const Route = createFileRoute("/_authenticated/assets")({
@@ -211,12 +212,20 @@ function AssetsPage() {
               </TableHeader>
               <TableBody>
                 {filtered.map((a) => (
-                  <TableRow key={a.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => openAssetDetails(a)}>
-                    <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                  <TableRow key={a.id} className="hover:bg-muted/50">
+                    <TableCell className="text-center">
                       <Checkbox checked={selectedIds.has(a.id)} onCheckedChange={() => toggleSelect(a.id)} />
                     </TableCell>
                     <TableCell className="font-mono text-xs">{a.asset_code}</TableCell>
-                    <TableCell className="font-medium">{a.asset_name}</TableCell>
+                    <TableCell>
+                      <button
+                        type="button"
+                        className="font-medium text-primary hover:underline cursor-pointer text-left"
+                        onClick={() => openAssetDetails(a)}
+                      >
+                        {a.asset_name}
+                      </button>
+                    </TableCell>
                     <TableCell>{a.categories?.category_name ?? "—"}</TableCell>
                     <TableCell className="text-sm">
                       <div className="font-medium">{a.brand || "—"}</div>
@@ -226,7 +235,7 @@ function AssetsPage() {
                     <TableCell><AssetOwnerDisplay name={a.employees?.name} /></TableCell>
                     <TableCell className="text-sm">{a.location || "—"}</TableCell>
                     <TableCell><StatusBadge status={a.status} /></TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
+                    <TableCell>
                       <AssetActionsMenu
                         asset={a}
                         canManage={canManage}
