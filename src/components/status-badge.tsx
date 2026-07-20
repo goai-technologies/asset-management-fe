@@ -14,7 +14,9 @@ const ASSET_STATUS_STYLES: Record<string, string> = {
 
 const ASSIGNMENT_STATUS_STYLES: Record<string, string> = {
   active: "bg-info/15 text-info border-info/30",
+  assigned: "bg-info/15 text-info border-info/30",
   returned: "bg-success/15 text-success border-success/30",
+  unassigned: "bg-muted text-muted-foreground border-border",
   overdue: "bg-destructive/15 text-destructive border-destructive/30",
 };
 
@@ -38,9 +40,13 @@ export function StatusBadge({ status, kind = "asset" }: { status: string; kind?:
     };
     return <Badge variant="outline" className={cn("font-medium", map[status] ?? map.none)}>{statusLabel(status)}</Badge>;
   }
+  const label = kind === "asset" && status === "available"
+    ? `🟢 ${statusLabel(status)}`
+    : statusLabel(status);
+
   return (
     <Badge variant="outline" className={cn("font-medium capitalize", styles[status] ?? "bg-muted text-muted-foreground")}>
-      {statusLabel(status)}
+      {label}
     </Badge>
   );
 }

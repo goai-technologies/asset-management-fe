@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { ArchivedAssetsPanel } from "@/components/archived-assets-panel";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -75,7 +76,7 @@ function SettingsPage() {
           <CardContent className="space-y-3 text-sm">
             <div><Badge className="mr-2">Administrator</Badge>Full access — manages users, assets, employees, vendors, categories, reports and settings.</div>
             <div><Badge variant="secondary" className="mr-2">IT Team</Badge>Manages assets, employees, vendors, categories, assignments and repairs. Cannot manage users or system settings.</div>
-            <div><Badge variant="outline" className="mr-2">Employee</Badge>Read-only. Can view only their own assigned assets and history.</div>
+            <div><Badge variant="outline" className="mr-2">Employee</Badge>View only — can browse assets and employees. Cannot add, edit, assign, unassign, or delete.</div>
           </CardContent>
         </Card>
       </div>
@@ -109,6 +110,10 @@ function SettingsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <div className="mt-6">
+        <ArchivedAssetsPanel />
+      </div>
     </div>
   );
 }

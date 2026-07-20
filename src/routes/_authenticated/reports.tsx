@@ -30,7 +30,7 @@ const REPORTS = [
   },
   {
     key: "by-department", title: "Assets by Department",
-    description: "Assets grouped by the department of the employee they're assigned to.",
+    description: "Assets grouped by the department of the assigned employee.",
     build: async () => {
       const { data } = await supabase.from("assignments")
         .select("assets(asset_code, asset_name, status), employees(name, department)")
@@ -44,7 +44,7 @@ const REPORTS = [
   },
   {
     key: "assigned", title: "Assigned Assets",
-    description: "All currently assigned assets with owner and assignment date.",
+    description: "All currently assigned assets with assignee and assignment date.",
     build: async () => {
       const { data } = await supabase.from("assignments")
         .select("assigned_date, expected_return_date, assets(asset_code, asset_name), employees(name, employee_code)")

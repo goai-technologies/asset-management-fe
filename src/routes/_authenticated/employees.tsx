@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Plus, Search, Pencil, Trash2, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useSession, useRoles } from "@/hooks/use-auth";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,8 @@ type Employee = {
 
 function EmployeesPage() {
   const qc = useQueryClient();
+  const { user } = useSession();
+  const { canManage } = useRoles(user?.id);
   const [q, setQ] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
@@ -53,7 +56,11 @@ function EmployeesPage() {
   return (
     <div>
       <PageHeader title="Employees" description="Company employees and their assigned assets."
-        actions={<Button onClick={() => { setEditing(null); setDialogOpen(true); }}><Plus className="h-4 w-4 mr-2" />Add Employee</Button>}
+        actions={canManage ? (
+          <Button onClick={() => { setEditing(null); setDialogOpen(true); }}>
+            <Plus className="h-4 w-4 mr-2" />Add Employee
+          </Button>
+        ) : undefined}
       />
 
       <Card className="mb-4">
@@ -93,8 +100,12 @@ function EmployeesPage() {
                     <TableCell>
                       <div className="flex justify-end gap-1">
                         <Button size="icon" variant="ghost" onClick={() => setProfileOpen(e)}><Eye className="h-4 w-4" /></Button>
-                        <Button size="icon" variant="ghost" onClick={() => { setEditing(e); setDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-                        <Button size="icon" variant="ghost" onClick={() => handleDelete(e.id)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                        {canManage && (
+                          <>
+                            <Button size="icon" variant="ghost" onClick={() => { setEditing(e); setDialogOpen(true); }}><Pencil className="h-4 w-4" /></Button>
+                            <Button size="icon" variant="ghost" onClick={() => handleDelete(e.id)} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -104,8 +115,10 @@ function EmployeesPage() {
         </CardContent>
       </Card>
 
-      <EmployeeDialog open={dialogOpen} onOpenChange={setDialogOpen} editing={editing}
-        onSaved={() => { qc.invalidateQueries({ queryKey: ["employees"] }); setDialogOpen(false); }} />
+      {canManage && (
+        <EmployeeDialog open={dialogOpen} onOpenChange={setDialogOpen} editing={editing}
+          onSaved={() => { qc.invalidateQueries({ queryKey: ["employees"] }); setDialogOpen(false); }} />
+      )}
 
       <ProfileDialog employee={profileOpen} onOpenChange={(v) => !v && setProfileOpen(null)} />
     </div>

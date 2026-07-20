@@ -5,9 +5,10 @@ import { Boxes, Users, CheckCircle2, Wrench, Archive, UserCheck, Plus, UserPlus,
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
-import { shortDate } from "@/lib/format";
+import { shortDate, dateTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { MockDB } from "@/lib/mock-db";
+import { useMockDbRefresh } from "@/hooks/use-mock-db-refresh";
 import { toast } from "sonner";
 import { AssetDialog } from "@/components/asset-dialog";
 import { EmployeeDialog } from "@/components/employee-dialog";
@@ -20,9 +21,7 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 const CHART_COLORS = ["#2563EB", "#0891B2", "#059669", "#D97706", "#DC2626", "#7C3AED", "#DB2777"];
 
 function Dashboard() {
-  const [refreshTick, setRefreshTick] = useState(0);
-
-  const triggerRefresh = () => setRefreshTick(t => t + 1);
+  const { refresh: triggerRefresh } = useMockDbRefresh();
 
   const stats = MockDB.getDashboardStats();
   const recent = MockDB.getRecentAssignments(6);
@@ -141,14 +140,20 @@ function Dashboard() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div>
                         <div className="font-medium text-sm">
-                          {r.assets?.asset_name || "Unknown Asset"} 
-                          <span className="text-muted-foreground font-normal">
-                            {r.status === 'returned' ? ' returned by ' : ' assigned to '}
-                          </span> 
-                          {r.employees?.name || "Unknown Employee"}
+                          {r.status === "unassigned" ? (
+                            <>Asset Unassigned from {r.employees?.name || "Unknown Employee"}</>
+                          ) : (
+                            <>
+                              {r.assets?.asset_name || "Unknown Asset"}
+                              <span className="text-muted-foreground font-normal">
+                                {r.status === "returned" ? " returned by " : " assigned to "}
+                              </span>
+                              {r.employees?.name || "Unknown Employee"}
+                            </>
+                          )}
                         </div>
                         <div className="text-xs text-muted-foreground mt-1">
-                          {shortDate(r.assigned_date)}
+                          {r.status === "unassigned" ? dateTime(r.assigned_date) : shortDate(r.assigned_date)}
                         </div>
                       </div>
                       <StatusBadge status={r.status} kind="assignment" />

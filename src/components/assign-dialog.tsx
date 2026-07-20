@@ -87,7 +87,7 @@ export function AssignDialog({
             </Select>
           </Field>
           
-          <Field label="Assign To" required>
+          <Field label="Assigned to" required>
             <Select value={form.employee_id} onValueChange={(v) => setForm({ ...form, employee_id: v })}>
               <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
               <SelectContent>

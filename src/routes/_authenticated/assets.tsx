@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
-import { Plus, Search, Download, Trash2, Pencil, Upload, MoreHorizontal, Eye, History, Wrench, ArrowLeftRight, Boxes, FileDown } from "lucide-react";
+import { Plus, Search, Download, Trash2, Upload, ArrowLeftRight, Boxes, FileDown, History } from "lucide-react";
 import { useSession, useRoles } from "@/hooks/use-auth";
+import { useMockDbRefresh } from "@/hooks/use-mock-db-refresh";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/empty-state";
@@ -11,15 +12,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { currency, shortDate } from "@/lib/format";
+import { currencyINR, shortDate, dateTime } from "@/lib/format";
 import { downloadCSV } from "@/lib/csv";
 import { MockDB, AssetRow } from "@/lib/mock-db";
 import { AssetDialog } from "@/components/asset-dialog";
 import { AssignDialog } from "@/components/assign-dialog";
+import { UnassignAssetDialog } from "@/components/unassign-asset-dialog";
+import { DeleteAssetDialog } from "@/components/delete-asset-dialog";
+import { AssetActionsMenu, type AssetDetailsTab } from "@/components/asset-actions-menu";
+import { AssetOwnerDisplay } from "@/components/asset-owner-display";
+import { RepairHistoryDialog } from "@/components/repair-history-dialog";
 
 export const Route = createFileRoute("/_authenticated/assets")({
   component: AssetsPage,
@@ -29,21 +34,28 @@ const STATUSES = ["available","assigned","reserved","repair","lost","disposed","
 
 function AssetsPage() {
   const { user } = useSession();
-  const { canManage } = useRoles(user?.id);
+  const { canManage, isAdmin } = useRoles(user?.id);
+  const performerName = (user?.user_metadata?.name as string | undefined) ?? user?.email ?? "Administrator";
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   
   const [dialogOpen, setDialogOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [unassignOpen, setUnassignOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [editing, setEditing] = useState<AssetRow | null>(null);
   const [viewAsset, setViewAsset] = useState<AssetRow | null>(null);
+  const [viewTab, setViewTab] = useState<AssetDetailsTab>("general");
   const [assignAssetId, setAssignAssetId] = useState<string | undefined>(undefined);
+  const [unassignAsset, setUnassignAsset] = useState<AssetRow | null>(null);
+  const [deleteAsset, setDeleteAsset] = useState<AssetRow | null>(null);
+  const [repairHistoryAsset, setRepairHistoryAsset] = useState<AssetRow | null>(null);
+  const [repairHistoryOpen, setRepairHistoryOpen] = useState(false);
   
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  
-  const [refreshTick, setRefreshTick] = useState(0);
-  const triggerRefresh = () => setRefreshTick(t => t + 1);
+
+  const { tick: refreshTick, refresh: triggerRefresh } = useMockDbRefresh();
 
   const [assets, setAssets] = useState<AssetRow[]>([]);
   const categories = MockDB.getCategories();
@@ -82,18 +94,22 @@ function AssetsPage() {
     setSelectedIds(next);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Delete this asset? This will also remove its assignment history.")) return;
-    MockDB.deleteAsset(id);
-    toast.success("Asset deleted");
-    triggerRefresh();
+  const openAssetDetails = (asset: AssetRow, tab: AssetDetailsTab = "general") => {
+    setViewAsset(asset);
+    setViewTab(tab);
   };
 
-  const handleBulkDelete = async () => {
-    if (!confirm(`Delete ${selectedIds.size} assets?`)) return;
-    selectedIds.forEach(id => MockDB.deleteAsset(id));
-    toast.success(`Deleted ${selectedIds.size} assets`);
+  const handleSoftDelete = (asset: AssetRow) => {
+    setDeleteAsset(asset);
+    setDeleteOpen(true);
+  };
+
+  const handleBulkDelete = () => {
+    if (!isAdmin) return;
+    selectedIds.forEach((id) => MockDB.softDeleteAsset(id));
+    toast.success(`🗑️ ${selectedIds.size} asset${selectedIds.size > 1 ? "s" : ""} deleted successfully.`);
     setSelectedIds(new Set());
+    if (viewAsset && selectedIds.has(viewAsset.id)) setViewAsset(null);
     triggerRefresh();
   };
 
@@ -102,7 +118,8 @@ function AssetsPage() {
       code: a.asset_code, name: a.asset_name, category: a.categories?.category_name ?? "",
       brand: a.brand ?? "", model: a.model ?? "", serial: a.serial_number ?? "", status: a.status,
       assigned_to: a.employees?.name ?? "", vendor: a.vendors?.vendor_name ?? "",
-      purchase_date: a.purchase_date ?? "", purchase_cost: a.purchase_cost ?? "",
+      purchase_date: a.purchase_date ?? "", purchase_cost_inr: a.purchase_cost_inr ?? a.purchase_cost ?? "",
+      invoice_number: a.invoice_number ?? "",
       warranty_expiry: a.warranty_expiry ?? "", location: a.location ?? "",
     })));
   };
@@ -111,7 +128,7 @@ function AssetsPage() {
     <div>
       <PageHeader
         title="Assets"
-        description="All company assets with lifecycle status, ownership, and warranty info."
+        description="All company assets with lifecycle status, assignments, and warranty info."
         actions={
           <>
             <Button variant="outline" onClick={exportCSV} title="Export CSV"><Download className="h-4 w-4 mr-2" />CSV</Button>
@@ -130,7 +147,7 @@ function AssetsPage() {
         <CardContent className="p-4 flex flex-col md:flex-row gap-3 items-center">
           <div className="relative flex-1 w-full">
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Search code, name, serial, employee…" className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} />
+            <Input placeholder="Search code, name, serial, assigned to…" className="pl-9" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           <div className="flex gap-3 w-full md:w-auto">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -157,7 +174,7 @@ function AssetsPage() {
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" onClick={() => setAssignOpen(true)}><ArrowLeftRight className="h-4 w-4 mr-2"/>Assign</Button>
             <Button variant="secondary" size="sm" onClick={() => toast.success("Mock: Exported selection")}><Download className="h-4 w-4 mr-2"/>Export</Button>
-            {canManage && <Button variant="destructive" size="sm" onClick={handleBulkDelete}><Trash2 className="h-4 w-4 mr-2"/>Delete</Button>}
+            {isAdmin && <Button variant="destructive" size="sm" onClick={handleBulkDelete}><Trash2 className="h-4 w-4 mr-2"/>Delete</Button>}
           </div>
         </div>
       )}
@@ -186,7 +203,7 @@ function AssetsPage() {
                   <TableHead>Category</TableHead>
                   <TableHead>Brand & Model</TableHead>
                   <TableHead>Serial Number</TableHead>
-                  <TableHead>Assigned To</TableHead>
+                  <TableHead>Assigned to</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-16">Actions</TableHead>
@@ -194,7 +211,7 @@ function AssetsPage() {
               </TableHeader>
               <TableBody>
                 {filtered.map((a) => (
-                  <TableRow key={a.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => setViewAsset(a)}>
+                  <TableRow key={a.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => openAssetDetails(a)}>
                     <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                       <Checkbox checked={selectedIds.has(a.id)} onCheckedChange={() => toggleSelect(a.id)} />
                     </TableCell>
@@ -206,25 +223,23 @@ function AssetsPage() {
                       <div className="text-xs text-muted-foreground">{a.model}</div>
                     </TableCell>
                     <TableCell className="text-sm font-mono text-muted-foreground">{a.serial_number || "—"}</TableCell>
-                    <TableCell>{a.employees?.name ?? <span className="text-muted-foreground">—</span>}</TableCell>
+                    <TableCell><AssetOwnerDisplay name={a.employees?.name} /></TableCell>
                     <TableCell className="text-sm">{a.location || "—"}</TableCell>
                     <TableCell><StatusBadge status={a.status} /></TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => setViewAsset(a)}><Eye className="h-4 w-4 mr-2" /> View Details</DropdownMenuItem>
-                          {canManage && <DropdownMenuItem onClick={() => { setEditing(a); setDialogOpen(true); }}><Pencil className="h-4 w-4 mr-2" /> Edit Asset</DropdownMenuItem>}
-                          {a.status === 'available' && <DropdownMenuItem onClick={() => { setAssignAssetId(a.id); setAssignOpen(true); }}><ArrowLeftRight className="h-4 w-4 mr-2" /> Assign Asset</DropdownMenuItem>}
-                          <DropdownMenuItem onClick={() => toast.success("Mock: Assignment History")}><History className="h-4 w-4 mr-2" /> Assignment History</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => toast.success("Mock: Repair History")}><Wrench className="h-4 w-4 mr-2" /> Repair History</DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {canManage && <DropdownMenuItem onClick={() => handleDelete(a.id)} className="text-destructive focus:text-destructive"><Trash2 className="h-4 w-4 mr-2" /> Delete Asset</DropdownMenuItem>}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <AssetActionsMenu
+                        asset={a}
+                        isAdmin={isAdmin}
+                        onViewDetails={() => openAssetDetails(a)}
+                        onViewHistory={() => openAssetDetails(a, "history")}
+                        onEdit={() => { setEditing(a); setDialogOpen(true); }}
+                        onUnassign={() => { setUnassignAsset(a); setUnassignOpen(true); }}
+                        onDelete={() => handleSoftDelete(a)}
+                        onRepairHistory={() => {
+                          setRepairHistoryAsset(a);
+                          setRepairHistoryOpen(true);
+                        }}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -234,11 +249,14 @@ function AssetsPage() {
         </CardContent>
       </Card>
 
-      {/* Asset Dialog */}
-      {canManage && (
+      {/* Asset Dialog — create (IT/Admin) or edit (Admin) */}
+      {(canManage || isAdmin) && (
         <AssetDialog
           open={dialogOpen}
-          onOpenChange={setDialogOpen}
+          onOpenChange={(open) => {
+            setDialogOpen(open);
+            if (!open) setEditing(null);
+          }}
           editing={editing}
           onSaved={triggerRefresh}
         />
@@ -255,6 +273,41 @@ function AssetsPage() {
         onSaved={triggerRefresh} 
       />
 
+      <UnassignAssetDialog
+        open={unassignOpen}
+        onOpenChange={(v) => {
+          setUnassignOpen(v);
+          if (!v) setUnassignAsset(null);
+        }}
+        asset={unassignAsset}
+        performedBy={performerName}
+        onUnassigned={triggerRefresh}
+      />
+
+      <DeleteAssetDialog
+        open={deleteOpen}
+        onOpenChange={(v) => {
+          setDeleteOpen(v);
+          if (!v) setDeleteAsset(null);
+        }}
+        asset={deleteAsset}
+        onDeleted={() => {
+          if (viewAsset && deleteAsset && viewAsset.id === deleteAsset.id) setViewAsset(null);
+          triggerRefresh();
+        }}
+      />
+
+      <RepairHistoryDialog
+        open={repairHistoryOpen}
+        onOpenChange={(open) => {
+          setRepairHistoryOpen(open);
+          if (!open) setRepairHistoryAsset(null);
+        }}
+        asset={repairHistoryAsset}
+        isAdmin={isAdmin}
+        onUpdated={triggerRefresh}
+      />
+
       {/* Asset Details Drawer */}
       <Sheet open={!!viewAsset} onOpenChange={(open) => !open && setViewAsset(null)}>
         <SheetContent className="sm:max-w-[600px] overflow-y-auto w-full">
@@ -268,67 +321,51 @@ function AssetsPage() {
                 </SheetDescription>
               </SheetHeader>
 
-              <Tabs defaultValue="general">
-                <TabsList className="w-full grid grid-cols-4 mb-6">
+              <Tabs value={viewTab} onValueChange={(v) => setViewTab(v as AssetDetailsTab)}>
+                <TabsList className="w-full grid grid-cols-3 mb-6">
                   <TabsTrigger value="general">General</TabsTrigger>
-                  <TabsTrigger value="purchase">Purchase</TabsTrigger>
-                  <TabsTrigger value="assignment">Assignment</TabsTrigger>
+                  <TabsTrigger value="images">Images</TabsTrigger>
                   <TabsTrigger value="history">History</TabsTrigger>
                 </TabsList>
-                
+
                 <TabsContent value="general" className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <DetailItem label="Asset ID" value={<span className="font-mono">{viewAsset.asset_code}</span>} />
+                    <DetailItem label="Asset Name" value={viewAsset.asset_name} />
                     <DetailItem label="Category" value={viewAsset.categories?.category_name} />
                     <DetailItem label="Location" value={viewAsset.location} />
                     <DetailItem label="Brand" value={viewAsset.brand} />
                     <DetailItem label="Model" value={viewAsset.model} />
                     <DetailItem label="Serial Number" value={viewAsset.serial_number} className="font-mono text-sm" />
-                    <DetailItem label="Status" value={<StatusBadge status={viewAsset.status} />} />
-                  </div>
-                  <div className="mt-4 border-t pt-4">
-                    <DetailItem label="Remarks" value={viewAsset.remarks} />
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="purchase" className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                    <DetailItem label="Asset Owner" value={<AssetOwnerDisplay name={viewAsset.employees?.name} />} />
                     <DetailItem label="Vendor" value={viewAsset.vendors?.vendor_name} />
+                    <DetailItem label="Status" value={<StatusBadge status={viewAsset.status} />} />
+                    <DetailItem
+                      label="Purchase Cost (INR)"
+                      value={viewAsset.purchase_cost_inr ?? viewAsset.purchase_cost
+                        ? currencyINR(viewAsset.purchase_cost_inr ?? viewAsset.purchase_cost)
+                        : undefined}
+                    />
                     <DetailItem label="Purchase Date" value={shortDate(viewAsset.purchase_date)} />
-                    <DetailItem label="Purchase Cost" value={viewAsset.purchase_cost ? currency(viewAsset.purchase_cost) : undefined} />
+                    <DetailItem label="Invoice Number" value={viewAsset.invoice_number} className="font-mono text-sm" />
                     <DetailItem label="Warranty Expiry" value={shortDate(viewAsset.warranty_expiry)} />
                   </div>
+                  <div className="border-t pt-4">
+                    <DetailItem label="Remarks" value={viewAsset.remarks} className="whitespace-pre-wrap" />
+                  </div>
                 </TabsContent>
 
-                <TabsContent value="assignment" className="space-y-4">
-                  {viewAsset.status === 'assigned' ? (
-                    <div className="bg-muted p-4 rounded-lg flex items-center justify-between">
-                      <div>
-                        <div className="text-sm text-muted-foreground">Currently assigned to</div>
-                        <div className="font-medium text-lg mt-1">{viewAsset.employees?.name}</div>
-                      </div>
-                      <Button variant="outline" size="sm" onClick={() => {
-                        MockDB.updateAsset(viewAsset.id, { status: 'available', assigned_employee_id: null });
-                        toast.success("Asset returned and is now available");
-                        triggerRefresh();
-                      }}>Revoke</Button>
-                    </div>
-                  ) : (
-                    <EmptyState 
-                      icon={ArrowLeftRight} 
-                      title="Not Assigned" 
-                      description="This asset is currently available in the inventory." 
-                      actionLabel="Assign Asset"
-                      onAction={() => { setAssignAssetId(viewAsset.id); setAssignOpen(true); }}
-                    />
-                  )}
+                <TabsContent value="images" className="space-y-4">
+                  <AssetImageGallery
+                    key={`${viewAsset.id}-${refreshTick}`}
+                    assetId={viewAsset.id}
+                    canManage={canManage}
+                    onChange={triggerRefresh}
+                  />
                 </TabsContent>
 
                 <TabsContent value="history" className="space-y-4">
-                  <EmptyState 
-                    icon={History} 
-                    title="Mock Data" 
-                    description="Assignment and repair history timeline would appear here." 
-                  />
+                  <AssignmentHistoryList assetId={viewAsset.id} />
                 </TabsContent>
               </Tabs>
             </>
@@ -339,12 +376,81 @@ function AssetsPage() {
   );
 }
 
-function DetailItem({ label, value, className }: { label: string, value?: React.ReactNode, className?: string }) {
+function AssignmentHistoryList({ assetId }: { assetId: string }) {
+  const assignments = MockDB.getAssetAssignments(assetId);
+
+  if (assignments.length === 0) {
+    return (
+      <EmptyState
+        icon={History}
+        title="No history yet"
+        description="Assignment and unassignment events will appear here."
+      />
+    );
+  }
+
+  return (
+    <ul className="divide-y">
+      {assignments.map((entry) => (
+        <li key={entry.id} className="py-3 flex items-start justify-between gap-4">
+          <div>
+            {entry.status === "unassigned" ? (
+              <>
+                <div className="font-medium text-sm">Asset Unassigned</div>
+                <div className="text-sm text-muted-foreground mt-1">
+                  Assigned To: {entry.employees?.name ?? "—"}
+                </div>
+                <div className="text-sm text-muted-foreground mt-0.5">
+                  Unassigned On: {dateTime(entry.assigned_date)}
+                </div>
+                <div className="text-sm text-muted-foreground mt-0.5">
+                  Reason: {entry.reason ?? "—"}
+                </div>
+                {entry.notes && (
+                  <div className="text-sm text-muted-foreground mt-0.5">
+                    Remarks: {entry.notes}
+                  </div>
+                )}
+                <div className="text-xs text-muted-foreground mt-1">
+                  Performed By: {entry.performed_by ?? "System"}
+                </div>
+              </>
+            ) : entry.status === "assigned" ? (
+              <>
+                <div className="font-medium text-sm">
+                  Assigned To: {entry.employees?.name ?? "—"}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Assigned On: {dateTime(entry.assigned_date)}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="font-medium text-sm">
+                  {entry.status === "returned" ? "Returned by" : "Assigned to"}{" "}
+                  {entry.employees?.name ?? "—"}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {entry.status === "returned" && entry.returned_date
+                    ? `Returned ${shortDate(entry.returned_date)}`
+                    : `Assigned ${shortDate(entry.assigned_date)}`}
+                </div>
+              </>
+            )}
+          </div>
+          <StatusBadge status={entry.status} kind="assignment" />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function DetailItem({ label, value, className }: { label: string; value?: React.ReactNode; className?: string }) {
   return (
     <div>
-      <div className="text-sm font-medium text-muted-foreground mb-1">{label}</div>
-      <div className={`text-sm ${value ? 'text-foreground' : 'text-muted-foreground'} ${className || ''}`}>
-        {value || '—'}
+      <div className="text-sm font-semibold text-foreground mb-1">{label}</div>
+      <div className={`text-sm ${value ? "text-muted-foreground" : "text-muted-foreground/70"} ${className || ""}`}>
+        {value || "—"}
       </div>
     </div>
   );

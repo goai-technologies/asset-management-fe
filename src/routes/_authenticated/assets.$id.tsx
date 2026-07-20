@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { PageHeader } from "@/components/page-header";
 import { currency, shortDate, warrantyState } from "@/lib/format";
+import { AssetOwnerDisplay } from "@/components/asset-owner-display";
 
 export const Route = createFileRoute("/_authenticated/assets/$id")({
   component: AssetDetail,
@@ -68,7 +69,7 @@ function AssetDetail() {
             <Row label="Category" value={cat} />
             <Row label="Serial Number" value={asset.serial_number} mono />
             <Row label="Location" value={asset.location} />
-            <Row label="Currently Assigned" value={employee?.name ? `${employee.name} (${employee.employee_code})` : "—"} />
+            <Row label="Assigned to" value={employee?.name ? `${employee.name} (${employee.employee_code})` : <AssetOwnerDisplay />} />
             {asset.remarks && <Row label="Remarks" value={asset.remarks} />}
           </CardContent>
         </Card>
