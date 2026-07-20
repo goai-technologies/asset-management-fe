@@ -16,7 +16,7 @@ export type AssetDetailsTab = "general" | "images" | "history";
 
 export function AssetActionsMenu({
   asset,
-  isAdmin,
+  canManage,
   onViewDetails,
   onViewHistory,
   onEdit,
@@ -25,7 +25,7 @@ export function AssetActionsMenu({
   onRepairHistory,
 }: {
   asset: AssetRow;
-  isAdmin: boolean;
+  canManage: boolean;
   onViewDetails: () => void;
   onViewHistory: () => void;
   onEdit: () => void;
@@ -45,12 +45,12 @@ export function AssetActionsMenu({
         <DropdownMenuItem onClick={onViewDetails}>
           <Eye className="h-4 w-4 mr-2" /> View Details
         </DropdownMenuItem>
-        {isAdmin && (
+        {canManage && (
           <DropdownMenuItem onClick={onEdit}>
             <Pencil className="h-4 w-4 mr-2" /> Edit Asset
           </DropdownMenuItem>
         )}
-        {isAdmin && hasOwner && (
+        {canManage && hasOwner && (
           <DropdownMenuItem onClick={onUnassign}>
             <RefreshCw className="h-4 w-4 mr-2" /> Unassign Asset
           </DropdownMenuItem>
@@ -62,9 +62,9 @@ export function AssetActionsMenu({
           <Wrench className="h-4 w-4 mr-2" /> Repair History
         </DropdownMenuItem>
 
-        {isAdmin ? <DropdownMenuSeparator /> : null}
+        {canManage ? <DropdownMenuSeparator /> : null}
 
-        {isAdmin && (
+        {canManage && (
           <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
             <Trash2 className="h-4 w-4 mr-2" /> Delete Asset
           </DropdownMenuItem>

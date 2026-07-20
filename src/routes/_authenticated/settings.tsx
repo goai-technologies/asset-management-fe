@@ -76,7 +76,7 @@ function SettingsPage() {
           <CardContent className="space-y-3 text-sm">
             <div><Badge className="mr-2">Administrator</Badge>Full access — manages users, assets, employees, vendors, categories, reports and settings.</div>
             <div><Badge variant="secondary" className="mr-2">IT Team</Badge>Manages assets, employees, vendors, categories, assignments and repairs. Cannot manage users or system settings.</div>
-            <div><Badge variant="outline" className="mr-2">Employee</Badge>View only — can browse assets and employees. Cannot add, edit, assign, unassign, or delete.</div>
+            <div><Badge variant="outline" className="mr-2">Employee</Badge>Can view, edit, delete, and unassign assets. Can manage employee records. Cannot access system settings.</div>
           </CardContent>
         </Card>
       </div>

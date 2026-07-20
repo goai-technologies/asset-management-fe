@@ -46,6 +46,6 @@ export function useRoles(userId: string | null | undefined) {
   const isAdmin = roles.includes("administrator");
   const isIt = roles.includes("it_team");
   const isEmployee = roles.includes("employee");
-  const canManage = isAdmin || isIt;
+  const canManage = isAdmin || isIt || isEmployee;
   return { roles, isAdmin, isIt, isEmployee, canManage, loading };
 }

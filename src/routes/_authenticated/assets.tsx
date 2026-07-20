@@ -34,7 +34,7 @@ const STATUSES = ["available","assigned","reserved","repair","lost","disposed","
 
 function AssetsPage() {
   const { user } = useSession();
-  const { canManage, isAdmin } = useRoles(user?.id);
+  const { canManage } = useRoles(user?.id);
   const performerName = (user?.user_metadata?.name as string | undefined) ?? user?.email ?? "Administrator";
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -105,7 +105,7 @@ function AssetsPage() {
   };
 
   const handleBulkDelete = () => {
-    if (!isAdmin) return;
+    if (!canManage) return;
     selectedIds.forEach((id) => MockDB.softDeleteAsset(id));
     toast.success(`🗑️ ${selectedIds.size} asset${selectedIds.size > 1 ? "s" : ""} deleted successfully.`);
     setSelectedIds(new Set());
@@ -174,7 +174,7 @@ function AssetsPage() {
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" onClick={() => setAssignOpen(true)}><ArrowLeftRight className="h-4 w-4 mr-2"/>Assign</Button>
             <Button variant="secondary" size="sm" onClick={() => toast.success("Mock: Exported selection")}><Download className="h-4 w-4 mr-2"/>Export</Button>
-            {isAdmin && <Button variant="destructive" size="sm" onClick={handleBulkDelete}><Trash2 className="h-4 w-4 mr-2"/>Delete</Button>}
+            {canManage && <Button variant="destructive" size="sm" onClick={handleBulkDelete}><Trash2 className="h-4 w-4 mr-2"/>Delete</Button>}
           </div>
         </div>
       )}
@@ -229,7 +229,7 @@ function AssetsPage() {
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <AssetActionsMenu
                         asset={a}
-                        isAdmin={isAdmin}
+                        canManage={canManage}
                         onViewDetails={() => openAssetDetails(a)}
                         onViewHistory={() => openAssetDetails(a, "history")}
                         onEdit={() => { setEditing(a); setDialogOpen(true); }}
@@ -250,7 +250,7 @@ function AssetsPage() {
       </Card>
 
       {/* Asset Dialog — create (IT/Admin) or edit (Admin) */}
-      {(canManage || isAdmin) && (
+      {canManage && (
         <AssetDialog
           open={dialogOpen}
           onOpenChange={(open) => {
@@ -304,7 +304,7 @@ function AssetsPage() {
           if (!open) setRepairHistoryAsset(null);
         }}
         asset={repairHistoryAsset}
-        isAdmin={isAdmin}
+        canManage={canManage}
         onUpdated={triggerRefresh}
       />
 

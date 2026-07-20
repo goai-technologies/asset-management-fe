@@ -21,13 +21,13 @@ export function RepairHistoryDialog({
   open,
   onOpenChange,
   asset,
-  isAdmin,
+  canManage,
   onUpdated,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   asset: AssetRow | null;
-  isAdmin: boolean;
+  canManage: boolean;
   onUpdated: () => void;
 }) {
   const [repairs, setRepairs] = useState<RepairRow[]>([]);
@@ -136,7 +136,7 @@ export function RepairHistoryDialog({
                   <StatusBadge status={repair.status} kind="repair" />
                 </div>
 
-                {editingId === repair.id && isAdmin && repair.status === "in_progress" ? (
+                {editingId === repair.id && canManage && repair.status === "in_progress" ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t">
                     <div className="space-y-2">
                       <Label>Repair Vendor</Label>
@@ -219,7 +219,7 @@ export function RepairHistoryDialog({
                         {repair.repair_notes}
                       </div>
                     )}
-                    {isAdmin && repair.status === "in_progress" && (
+                    {canManage && repair.status === "in_progress" && (
                       <div className="col-span-2 pt-1">
                         <Button size="sm" variant="outline" onClick={() => startEdit(repair)}>
                           Edit Repair Details
