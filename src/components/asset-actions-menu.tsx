@@ -1,5 +1,5 @@
 import {
-  Eye, Pencil, History, Wrench, RefreshCw, Trash2, MoreHorizontal, ArrowLeftRight, Archive, Ban,
+  Eye, Pencil, History, Wrench, RefreshCw, MoreHorizontal, ArrowLeftRight, Archive, Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,7 +22,6 @@ export function AssetActionsMenu({
   onEdit,
   onAssign,
   onUnassign,
-  onDelete,
   onRepairHistory,
   onDispose,
   onDeactivate,
@@ -34,7 +33,6 @@ export function AssetActionsMenu({
   onEdit: () => void;
   onAssign: () => void;
   onUnassign: () => void;
-  onDelete: () => void;
   onRepairHistory: () => void;
   onDispose: () => void;
   onDeactivate: () => void;
@@ -88,14 +86,6 @@ export function AssetActionsMenu({
         {canManage && canDeactivate && (
           <DropdownMenuItem onClick={onDeactivate} className="text-warning-foreground focus:text-warning-foreground">
             <Ban className="h-4 w-4 mr-2" /> Deactivate Asset
-          </DropdownMenuItem>
-        )}
-
-        {canManage ? <DropdownMenuSeparator /> : null}
-
-        {canManage && (
-          <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
-            <Trash2 className="h-4 w-4 mr-2" /> Delete Asset
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>

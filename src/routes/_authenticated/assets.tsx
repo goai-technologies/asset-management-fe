@@ -27,7 +27,6 @@ import { AssetDialog } from "@/components/asset-dialog";
 import { EmployeeDialog } from "@/components/employee-dialog";
 import { AssignDialog } from "@/components/assign-dialog";
 import { UnassignAssetDialog } from "@/components/unassign-asset-dialog";
-import { DeleteAssetDialog } from "@/components/delete-asset-dialog";
 import { DisposeAssetDialog } from "@/components/dispose-asset-dialog";
 import { DeactivateAssetDialog } from "@/components/deactivate-asset-dialog";
 import { AssetActionsMenu, type AssetDetailsTab } from "@/components/asset-actions-menu";
@@ -53,13 +52,11 @@ function AssetsPage() {
   const [employeeOpen, setEmployeeOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [unassignOpen, setUnassignOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
   const [editing, setEditing] = useState<AssetRow | null>(null);
   const [viewAsset, setViewAsset] = useState<AssetRow | null>(null);
   const [viewTab, setViewTab] = useState<AssetDetailsTab>("general");
   const [assignAssetId, setAssignAssetId] = useState<string | undefined>(undefined);
   const [unassignAsset, setUnassignAsset] = useState<AssetRow | null>(null);
-  const [deleteAsset, setDeleteAsset] = useState<AssetRow | null>(null);
   const [disposeAsset, setDisposeAsset] = useState<AssetRow | null>(null);
   const [disposeOpen, setDisposeOpen] = useState(false);
   const [deactivateAsset, setDeactivateAsset] = useState<AssetRow | null>(null);
@@ -111,11 +108,6 @@ function AssetsPage() {
   const openAssetDetails = (asset: AssetRow, tab: AssetDetailsTab = "general") => {
     setViewAsset(asset);
     setViewTab(tab);
-  };
-
-  const handleSoftDelete = (asset: AssetRow) => {
-    setDeleteAsset(asset);
-    setDeleteOpen(true);
   };
 
   const handleBulkDelete = () => {
@@ -276,7 +268,6 @@ function AssetsPage() {
                         onEdit={() => { setEditing(a); setDialogOpen(true); }}
                         onAssign={() => { setAssignAssetId(a.id); setAssignOpen(true); }}
                         onUnassign={() => { setUnassignAsset(a); setUnassignOpen(true); }}
-                        onDelete={() => handleSoftDelete(a)}
                         onRepairHistory={() => {
                           setRepairHistoryAsset(a);
                           setRepairHistoryOpen(true);
@@ -334,19 +325,6 @@ function AssetsPage() {
         asset={unassignAsset}
         performedBy={performerName}
         onUnassigned={triggerRefresh}
-      />
-
-      <DeleteAssetDialog
-        open={deleteOpen}
-        onOpenChange={(v) => {
-          setDeleteOpen(v);
-          if (!v) setDeleteAsset(null);
-        }}
-        asset={deleteAsset}
-        onDeleted={() => {
-          if (viewAsset && deleteAsset && viewAsset.id === deleteAsset.id) setViewAsset(null);
-          triggerRefresh();
-        }}
       />
 
       <DisposeAssetDialog
