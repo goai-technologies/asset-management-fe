@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
-import { Plus, Search, Download, Trash2, ArrowLeftRight, Boxes, FileDown, History, UserPlus } from "lucide-react";
+import { Plus, Search, Download, Trash2, ArrowLeftRight, Boxes, History, UserPlus } from "lucide-react";
 import { useSession, useRoles } from "@/hooks/use-auth";
 import { useMockDbRefresh } from "@/hooks/use-mock-db-refresh";
 import { PageHeader } from "@/components/page-header";
@@ -17,12 +17,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { currencyINR, shortDate, dateTime } from "@/lib/format";
 import { downloadCSV } from "@/lib/csv";
+import {
+  CLICKABLE_TABLE_ROW_CLASS,
+  handleClickableRowClick,
+  handleClickableRowKeyDown,
+} from "@/lib/clickable-table-row";
 import { MockDB, AssetRow } from "@/lib/mock-db";
 import { AssetDialog } from "@/components/asset-dialog";
 import { EmployeeDialog } from "@/components/employee-dialog";
 import { AssignDialog } from "@/components/assign-dialog";
 import { UnassignAssetDialog } from "@/components/unassign-asset-dialog";
 import { DeleteAssetDialog } from "@/components/delete-asset-dialog";
+import { DisposeAssetDialog } from "@/components/dispose-asset-dialog";
+import { DeactivateAssetDialog } from "@/components/deactivate-asset-dialog";
 import { AssetActionsMenu, type AssetDetailsTab } from "@/components/asset-actions-menu";
 import { AssetOwnerDisplay } from "@/components/asset-owner-display";
 import { AssetImageGallery } from "@/components/asset-images/asset-image-gallery";
@@ -32,7 +39,7 @@ export const Route = createFileRoute("/_authenticated/assets")({
   component: AssetsPage,
 });
 
-const STATUSES = ["available","assigned","reserved","repair","lost","disposed","retired"] as const;
+const STATUSES = ["available","assigned","reserved","repair","lost","inactive","disposed","retired"] as const;
 
 function AssetsPage() {
   const { user } = useSession();
@@ -53,6 +60,10 @@ function AssetsPage() {
   const [assignAssetId, setAssignAssetId] = useState<string | undefined>(undefined);
   const [unassignAsset, setUnassignAsset] = useState<AssetRow | null>(null);
   const [deleteAsset, setDeleteAsset] = useState<AssetRow | null>(null);
+  const [disposeAsset, setDisposeAsset] = useState<AssetRow | null>(null);
+  const [disposeOpen, setDisposeOpen] = useState(false);
+  const [deactivateAsset, setDeactivateAsset] = useState<AssetRow | null>(null);
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [repairHistoryAsset, setRepairHistoryAsset] = useState<AssetRow | null>(null);
   const [repairHistoryOpen, setRepairHistoryOpen] = useState(false);
   
@@ -147,17 +158,11 @@ function AssetsPage() {
               <Button variant="outline" onClick={exportCSV} title="Export CSV">
                 <Download className="h-4 w-4 mr-2" />CSV
               </Button>
-              <Button variant="outline" onClick={() => toast.success("Mock: PDF Exported")} title="Export PDF">
-                <FileDown className="h-4 w-4 mr-2" />PDF
-              </Button>
             </>
           ) : (
             <>
               <Button variant="outline" onClick={exportCSV} title="Export CSV">
                 <Download className="h-4 w-4 mr-2" />CSV
-              </Button>
-              <Button variant="outline" onClick={() => toast.success("Mock: PDF Exported")} title="Export PDF">
-                <FileDown className="h-4 w-4 mr-2" />PDF
               </Button>
             </>
           )
@@ -232,8 +237,15 @@ function AssetsPage() {
               </TableHeader>
               <TableBody>
                 {filtered.map((a) => (
-                  <TableRow key={a.id} className="hover:bg-muted/50">
-                    <TableCell className="text-center">
+                  <TableRow
+                    key={a.id}
+                    tabIndex={0}
+                    className={CLICKABLE_TABLE_ROW_CLASS}
+                    aria-label={`View details for ${a.asset_name}`}
+                    onClick={(event) => handleClickableRowClick(event, () => openAssetDetails(a))}
+                    onKeyDown={(event) => handleClickableRowKeyDown(event, () => openAssetDetails(a))}
+                  >
+                    <TableCell className="text-center" data-stop-row-click>
                       <Checkbox checked={selectedIds.has(a.id)} onCheckedChange={() => toggleSelect(a.id)} />
                     </TableCell>
                     <TableCell className="font-mono text-xs">{a.asset_code}</TableCell>
@@ -255,7 +267,7 @@ function AssetsPage() {
                     <TableCell><AssetOwnerDisplay name={a.employees?.name} /></TableCell>
                     <TableCell className="text-sm">{a.location || "—"}</TableCell>
                     <TableCell><StatusBadge status={a.status} /></TableCell>
-                    <TableCell>
+                    <TableCell data-stop-row-click>
                       <AssetActionsMenu
                         asset={a}
                         canManage={canManage}
@@ -269,6 +281,8 @@ function AssetsPage() {
                           setRepairHistoryAsset(a);
                           setRepairHistoryOpen(true);
                         }}
+                        onDispose={() => { setDisposeAsset(a); setDisposeOpen(true); }}
+                        onDeactivate={() => { setDeactivateAsset(a); setDeactivateOpen(true); }}
                       />
                     </TableCell>
                   </TableRow>
@@ -333,6 +347,28 @@ function AssetsPage() {
           if (viewAsset && deleteAsset && viewAsset.id === deleteAsset.id) setViewAsset(null);
           triggerRefresh();
         }}
+      />
+
+      <DisposeAssetDialog
+        open={disposeOpen}
+        onOpenChange={(v) => {
+          setDisposeOpen(v);
+          if (!v) setDisposeAsset(null);
+        }}
+        asset={disposeAsset}
+        performedBy={performerName}
+        onDisposed={triggerRefresh}
+      />
+
+      <DeactivateAssetDialog
+        open={deactivateOpen}
+        onOpenChange={(v) => {
+          setDeactivateOpen(v);
+          if (!v) setDeactivateAsset(null);
+        }}
+        asset={deactivateAsset}
+        performedBy={performerName}
+        onDeactivated={triggerRefresh}
       />
 
       <RepairHistoryDialog
@@ -443,6 +479,39 @@ function AssignmentHistoryList({ assetId }: { assetId: string }) {
                 </div>
                 <div className="text-sm text-muted-foreground mt-0.5">
                   Reason: {entry.reason ?? "—"}
+                </div>
+                {entry.notes && (
+                  <div className="text-sm text-muted-foreground mt-0.5">
+                    Remarks: {entry.notes}
+                  </div>
+                )}
+                <div className="text-xs text-muted-foreground mt-1">
+                  Performed By: {entry.performed_by ?? "System"}
+                </div>
+              </>
+            ) : entry.status === "disposed" ? (
+              <>
+                <div className="font-medium text-sm">Asset Disposed</div>
+                <div className="text-sm text-muted-foreground mt-1">
+                  Disposal Date: {shortDate(entry.assigned_date)}
+                </div>
+                <div className="text-sm text-muted-foreground mt-0.5">
+                  Reason: {entry.reason ?? "—"}
+                </div>
+                {entry.notes && (
+                  <div className="text-sm text-muted-foreground mt-0.5">
+                    Remarks: {entry.notes}
+                  </div>
+                )}
+                <div className="text-xs text-muted-foreground mt-1">
+                  Performed By: {entry.performed_by ?? "System"}
+                </div>
+              </>
+            ) : entry.status === "inactive" ? (
+              <>
+                <div className="font-medium text-sm">Asset Deactivated</div>
+                <div className="text-sm text-muted-foreground mt-1">
+                  Deactivated On: {dateTime(entry.assigned_date)}
                 </div>
                 {entry.notes && (
                   <div className="text-sm text-muted-foreground mt-0.5">

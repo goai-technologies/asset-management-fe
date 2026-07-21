@@ -4,19 +4,22 @@ import { statusLabel } from "@/lib/format";
 
 const ASSET_STATUS_STYLES: Record<string, string> = {
   available: "bg-success/15 text-success border-success/30",
-  assigned: "bg-info/15 text-info border-info/30",
+  assigned: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-600",
   reserved: "bg-accent text-accent-foreground border-border",
   repair: "bg-warning/20 text-warning-foreground border-warning/40",
   lost: "bg-destructive/15 text-destructive border-destructive/30",
   disposed: "bg-muted text-muted-foreground border-border",
   retired: "bg-muted text-muted-foreground border-border",
+  inactive: "bg-warning/20 text-warning-foreground border-warning/40",
 };
 
 const ASSIGNMENT_STATUS_STYLES: Record<string, string> = {
   active: "bg-info/15 text-info border-info/30",
-  assigned: "bg-info/15 text-info border-info/30",
+  assigned: "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-600",
   returned: "bg-success/15 text-success border-success/30",
-  unassigned: "bg-muted text-muted-foreground border-border",
+  unassigned: "bg-[#DBEAFE] text-[#1D4ED8] border-[#93C5FD] dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-700",
+  disposed: "bg-muted text-muted-foreground border-border",
+  inactive: "bg-warning/20 text-warning-foreground border-warning/40",
   overdue: "bg-destructive/15 text-destructive border-destructive/30",
 };
 

@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { ThemeProvider } from "@/hooks/use-theme";
 
 function NotFoundComponent() {
   return (
@@ -66,15 +67,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "EAMS — Enterprise Asset Management System" },
-      { name: "description", content: "Track, assign, and manage company assets across their full lifecycle." },
-      { name: "author", content: "EAMS" },
-      { property: "og:title", content: "EAMS — Enterprise Asset Management System" },
-      { property: "og:description", content: "Track, assign, and manage company assets across their full lifecycle." },
+      { title: "goAI Asset Management" },
+      { name: "description", content: "Manage, Assign & Track Company Assets" },
+      { name: "author", content: "goAI" },
+      { property: "og:title", content: "goAI Asset Management" },
+      { property: "og:description", content: "Manage, Assign & Track Company Assets" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "EAMS — Enterprise Asset Management System" },
-      { name: "twitter:description", content: "Track, assign, and manage company assets across their full lifecycle." },
+      { name: "twitter:title", content: "goAI Asset Management" },
+      { name: "twitter:description", content: "Manage, Assign & Track Company Assets" },
       { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/901e588f-d747-4644-b201-81e175faa282/id-preview-bc8b1313--bc4c8a40-1865-43f6-9300-e06d5229a0ec.lovable.app-1784283648514.png" },
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/901e588f-d747-4644-b201-81e175faa282/id-preview-bc8b1313--bc4c8a40-1865-43f6-9300-e06d5229a0ec.lovable.app-1784283648514.png" },
     ],
@@ -94,8 +95,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <head><HeadContent /></head>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('eams_theme');if(t==='dark'){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark';}}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body>
         {children}
         <Scripts />
@@ -119,8 +127,10 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
-      <Toaster richColors position="top-right" />
+      <ThemeProvider>
+        <Outlet />
+        <Toaster richColors position="top-right" />
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

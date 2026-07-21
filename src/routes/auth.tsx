@@ -7,7 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PasswordInput } from "@/components/password-input";
+import { ForgotPasswordDialog } from "@/components/forgot-password-dialog";
 import { toast } from "sonner";
+import { NotificationEvents } from "@/lib/notifications";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -22,6 +25,7 @@ function AuthPage() {
   const [signUpName, setSignUpName] = useState("");
   const [signUpEmail, setSignUpEmail] = useState("");
   const [signUpPass, setSignUpPass] = useState("");
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -35,6 +39,7 @@ function AuthPage() {
     const { error } = await supabase.auth.signInWithPassword({ email: signInEmail, password: signInPass });
     setLoading(false);
     if (error) { toast.error(error.message); return; }
+    NotificationEvents.loginSuccessful(signInEmail);
     toast.success("Welcome back");
     navigate({ to: "/dashboard" });
   };
@@ -56,15 +61,15 @@ function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-white to-blue-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-card to-muted p-4 transition-colors duration-300">
       <div className="w-full max-w-md">
         <div className="flex items-center gap-2 justify-center mb-6">
           <div className="h-10 w-10 rounded-lg bg-primary text-primary-foreground grid place-items-center">
             <Boxes className="h-6 w-6" />
           </div>
           <div>
-            <div className="font-bold text-xl leading-tight">EAMS</div>
-            <div className="text-xs text-muted-foreground">Enterprise Asset Management</div>
+            <div className="font-bold text-xl leading-tight">goAI Asset Management</div>
+            <div className="text-xs text-muted-foreground">Manage, Assign & Track Company Assets</div>
           </div>
         </div>
         <Card className="shadow-lg">
@@ -86,7 +91,22 @@ function AuthPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="si-pass">Password</Label>
-                    <Input id="si-pass" type="password" required value={signInPass} onChange={(e) => setSignInPass(e.target.value)} />
+                    <PasswordInput
+                      id="si-pass"
+                      required
+                      value={signInPass}
+                      onChange={(e) => setSignInPass(e.target.value)}
+                      autoComplete="current-password"
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                        onClick={() => setForgotPasswordOpen(true)}
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
                   </div>
                   <Button className="w-full" type="submit" disabled={loading}>{loading ? "Signing in…" : "Sign in"}</Button>
                 </form>
@@ -111,6 +131,11 @@ function AuthPage() {
             </Tabs>
           </CardContent>
         </Card>
+        <ForgotPasswordDialog
+          open={forgotPasswordOpen}
+          onOpenChange={setForgotPasswordOpen}
+          initialEmail={signInEmail}
+        />
         <p className="text-center text-xs text-muted-foreground mt-4">
           Demo tip: sign up first to become the Administrator. Additional signups become Employees; promote them from Settings.
         </p>

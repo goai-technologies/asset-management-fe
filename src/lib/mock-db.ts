@@ -1,4 +1,5 @@
 import { getAssetImageStorage } from "@/lib/asset-images";
+import { NotificationEvents } from "@/lib/notifications";
 
 export type Category = { id: string; category_name: string };
 export type Vendor = { id: string; vendor_name: string };
@@ -11,6 +12,11 @@ export type Employee = {
   department?: string | null;
   designation?: string | null;
   location?: string | null;
+  status?: "active" | "inactive";
+};
+
+export type EmployeeRow = Employee & {
+  assigned_asset_count: number;
 };
 export type Asset = {
   id: string;
@@ -66,6 +72,15 @@ export const UNASSIGN_REASONS = [
   "Other",
 ] as const;
 
+export const DISPOSAL_REASONS = [
+  "End of Life",
+  "Damaged Beyond Repair",
+  "Obsolete Technology",
+  "Sold",
+  "Donated",
+  "Other",
+] as const;
+
 export type UnassignReason = (typeof UNASSIGN_REASONS)[number];
 
 export type Repair = {
@@ -111,8 +126,8 @@ const DEFAULT_DB: DBSchema = {
     { id: "v3", vendor_name: "Amazon Business" },
   ],
   employees: [
-    { id: "e1", employee_code: "EMP-1001", name: "John Doe", email: "john@example.com", phone: "+1 555-0101", department: "Engineering", designation: "Developer", location: "New York" },
-    { id: "e2", employee_code: "EMP-1002", name: "Jane Smith", email: "jane@example.com", phone: "+1 555-0102", department: "Design", designation: "UI/UX Designer", location: "San Francisco" },
+    { id: "e1", employee_code: "EMP-1001", name: "John Doe", email: "john@example.com", phone: "+1 555-0101", department: "Engineering", designation: "Developer", location: "New York", status: "active" },
+    { id: "e2", employee_code: "EMP-1002", name: "Jane Smith", email: "jane@example.com", phone: "+1 555-0102", department: "Design", designation: "UI/UX Designer", location: "San Francisco", status: "active" },
   ],
   assets: [
     {
@@ -150,11 +165,16 @@ function getDb(): DBSchema {
     needsSave = true;
   }
   parsed.employees = parsed.employees.map((e, i) => {
+    let next = e;
     if (!e.employee_code) {
       needsSave = true;
-      return { ...e, employee_code: `EMP-${1001 + i}` };
+      next = { ...next, employee_code: `EMP-${1001 + i}` };
     }
-    return e;
+    if (!next.status) {
+      needsSave = true;
+      next = { ...next, status: "active" as const };
+    }
+    return next;
   });
   if (needsSave) saveDb(parsed);
   return parsed;
@@ -186,10 +206,111 @@ function joinAssetRow(db: DBSchema, a: Asset): AssetRow {
   };
 }
 
+function countAssignedAssets(db: DBSchema, employeeId: string): number {
+  return db.assets.filter((a) => isActiveAsset(a) && a.assigned_employee_id === employeeId).length;
+}
+
+function releaseActiveAssignment(
+  db: DBSchema,
+  asset: Asset,
+  options: { reason: string; remarks?: string; performedBy?: string },
+) {
+  if (!asset.assigned_employee_id) return;
+
+  const employee_id = asset.assigned_employee_id;
+  const now = new Date().toISOString();
+  const today = now.split("T")[0];
+
+  const activeAssignment = db.assignments.find(
+    (a) => a.asset_id === asset.id && a.status === "assigned" && !a.returned_date,
+  );
+  if (activeAssignment) {
+    activeAssignment.returned_date = today;
+    activeAssignment.status = "returned";
+  }
+
+  db.assignments.push({
+    id: genId(),
+    asset_id: asset.id,
+    employee_id,
+    assigned_date: now,
+    returned_date: null,
+    status: "unassigned",
+    notes: options.remarks?.trim() || null,
+    reason: options.reason,
+    performed_by: options.performedBy ?? "System",
+    created_at: now,
+  });
+
+  asset.assigned_employee_id = null;
+}
+
+function joinEmployeeRow(db: DBSchema, employee: Employee): EmployeeRow {
+  return {
+    ...employee,
+    status: employee.status ?? "active",
+    assigned_asset_count: countAssignedAssets(db, employee.id),
+  };
+}
+
 export const MockDB = {
   getCategories: () => getDb().categories,
   getVendors: () => getDb().vendors,
   getEmployees: () => getDb().employees,
+
+  getEmployeeRows: (): EmployeeRow[] => {
+    const db = getDb();
+    return db.employees.map((e) => joinEmployeeRow(db, e));
+  },
+
+  getEmployeeById: (id: string): EmployeeRow | null => {
+    const db = getDb();
+    const employee = db.employees.find((e) => e.id === id);
+    return employee ? joinEmployeeRow(db, employee) : null;
+  },
+
+  getEmployeeAssignedAssets: (employee_id: string): AssetRow[] => {
+    const db = getDb();
+    return db.assets
+      .filter((a) => isActiveAsset(a) && a.assigned_employee_id === employee_id)
+      .map((a) => joinAssetRow(db, a));
+  },
+
+  getEmployeeAssignments: (employee_id: string): AssignmentRow[] => {
+    const db = getDb();
+    const activeAssetIds = new Set(db.assets.filter(isActiveAsset).map((a) => a.id));
+    return db.assignments
+      .filter((a) => a.employee_id === employee_id && activeAssetIds.has(a.asset_id))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .map((as) => ({
+        ...as,
+        assets: db.assets.find((a) => a.id === as.asset_id) || null,
+        employees: db.employees.find((e) => e.id === as.employee_id) || null,
+      }));
+  },
+
+  getEmployeeRepairHistory: (employee_id: string): RepairRow[] => {
+    const db = getDb();
+    const assetIds = new Set(
+      db.assignments.filter((a) => a.employee_id === employee_id).map((a) => a.asset_id),
+    );
+    db.assets
+      .filter((a) => a.assigned_employee_id === employee_id)
+      .forEach((a) => assetIds.add(a.id));
+
+    return db.repairs
+      .filter((r) => assetIds.has(r.asset_id))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .map((r) => ({
+        ...r,
+        assets: db.assets.find((a) => a.id === r.asset_id) || null,
+        vendors: db.vendors.find((v) => v.id === r.vendor_id) || null,
+      }));
+  },
+
+  getEmployeeAssignedAssetCount: (employee_id: string): number => {
+    return countAssignedAssets(getDb(), employee_id);
+  },
   
   getAssets: (options?: { includeDeleted?: boolean }): AssetRow[] => {
     const db = getDb();
@@ -232,6 +353,7 @@ export const MockDB = {
     };
     db.assets.push(newAsset);
     saveDb(db);
+    NotificationEvents.assetAdded({ id: newAsset.id, asset_name: newAsset.asset_name });
     return newAsset;
   },
 
@@ -241,6 +363,8 @@ export const MockDB = {
     if (idx !== -1) {
       db.assets[idx] = { ...db.assets[idx], ...updates };
       saveDb(db);
+      const updated = db.assets[idx];
+      NotificationEvents.assetUpdated({ id: updated.id, asset_name: updated.asset_name });
     }
   },
 
@@ -251,6 +375,7 @@ export const MockDB = {
     asset.isDeleted = true;
     asset.deleted_at = new Date().toISOString();
     saveDb(db);
+    NotificationEvents.assetDeleted({ id: asset.id, asset_name: asset.asset_name });
   },
 
   restoreAsset: (id: string) => {
@@ -264,11 +389,15 @@ export const MockDB = {
 
   permanentlyDeleteAsset: (id: string) => {
     const db = getDb();
+    const asset = db.assets.find((a) => a.id === id);
     db.assets = db.assets.filter(a => a.id !== id);
     db.assignments = db.assignments.filter(a => a.asset_id !== id);
     db.repairs = db.repairs.filter(r => r.asset_id !== id);
     getAssetImageStorage().deleteImagesForAsset(id);
     saveDb(db);
+    if (asset) {
+      NotificationEvents.assetDeleted({ id: asset.id, asset_name: asset.asset_name });
+    }
   },
 
   /** @deprecated Use softDeleteAsset or permanentlyDeleteAsset */
@@ -282,20 +411,53 @@ export const MockDB = {
       ...employee,
       id: genId(),
       employee_code: employee.employee_code || genEmployeeCode(),
+      status: employee.status ?? "active",
     };
     db.employees.push(newEmp);
     saveDb(db);
+    NotificationEvents.employeeAdded({ id: newEmp.id, name: newEmp.name });
     return newEmp;
+  },
+
+  updateEmployee: (id: string, updates: Partial<Omit<Employee, "id">>) => {
+    const db = getDb();
+    const idx = db.employees.findIndex((e) => e.id === id);
+    if (idx === -1) throw new Error("Employee not found");
+    db.employees[idx] = { ...db.employees[idx], ...updates };
+    saveDb(db);
+    return db.employees[idx];
+  },
+
+  deleteEmployee: (id: string) => {
+    const db = getDb();
+    const employee = db.employees.find((e) => e.id === id);
+    if (!employee) throw new Error("Employee not found");
+
+    const assignedCount = countAssignedAssets(db, id);
+    if (assignedCount > 0) {
+      const error = new Error("ASSIGNED_ASSETS") as Error & { assignedCount: number };
+      error.assignedCount = assignedCount;
+      throw error;
+    }
+
+    db.employees = db.employees.filter((e) => e.id !== id);
+    saveDb(db);
+    NotificationEvents.employeeDeleted({ id: employee.id, name: employee.name });
   },
 
   assignAsset: (asset_id: string, employee_id: string, assigned_date: string, expected_return: string | null, notes: string | null) => {
     const db = getDb();
-    // Update asset
     const asset = db.assets.find(a => a.id === asset_id);
-    if (asset) {
-      asset.status = "assigned";
-      asset.assigned_employee_id = employee_id;
+    if (!asset) throw new Error("Asset not found");
+    if (asset.status === "disposed" || asset.status === "inactive") {
+      throw new Error("This asset cannot be assigned");
     }
+    if (asset.assigned_employee_id) {
+      throw new Error("Asset is already assigned");
+    }
+    // Update asset
+    asset.status = "assigned";
+    asset.assigned_employee_id = employee_id;
     // Add assignment record
     db.assignments.push({
       id: genId(),
@@ -308,6 +470,13 @@ export const MockDB = {
       created_at: new Date().toISOString()
     });
     saveDb(db);
+    const employee = db.employees.find((e) => e.id === employee_id);
+    if (asset && employee) {
+      NotificationEvents.assetAssigned(
+        { id: asset.id, asset_name: asset.asset_name },
+        { id: employee.id, name: employee.name },
+      );
+    }
   },
 
   unassignAsset: (
@@ -368,7 +537,89 @@ export const MockDB = {
 
     saveDb(db);
 
+    if (asset && employee) {
+      if (sentForRepair) {
+        NotificationEvents.assetSentForRepair({ id: asset.id, asset_name: asset.asset_name });
+      } else {
+        NotificationEvents.assetUnassigned(
+          { id: asset.id, asset_name: asset.asset_name },
+          { id: employee.id, name: employee.name },
+        );
+      }
+    }
+
     return { employeeName: employee?.name ?? "Unknown", sentForRepair };
+  },
+
+  disposeAsset: (
+    asset_id: string,
+    options: { reason: string; disposal_date: string; remarks?: string; performedBy?: string },
+  ) => {
+    const db = getDb();
+    const asset = db.assets.find((a) => a.id === asset_id);
+    if (!asset) throw new Error("Asset not found");
+    if (asset.status === "disposed") throw new Error("Asset is already disposed");
+    if (asset.assigned_employee_id) {
+      throw new Error("Unassign the asset before disposing");
+    }
+
+    const now = new Date().toISOString();
+    asset.status = "disposed";
+
+    db.assignments.push({
+      id: genId(),
+      asset_id,
+      employee_id: "",
+      assigned_date: options.disposal_date,
+      returned_date: null,
+      status: "disposed",
+      notes: options.remarks?.trim() || null,
+      reason: options.reason,
+      performed_by: options.performedBy ?? "System",
+      created_at: now,
+    });
+
+    saveDb(db);
+    return asset;
+  },
+
+  deactivateAsset: (
+    asset_id: string,
+    options?: { remarks?: string; performedBy?: string },
+  ) => {
+    const db = getDb();
+    const asset = db.assets.find((a) => a.id === asset_id);
+    if (!asset) throw new Error("Asset not found");
+    if (asset.status === "disposed") throw new Error("Disposed assets cannot be deactivated");
+    if (asset.status === "inactive") throw new Error("Asset is already inactive");
+
+    const now = new Date().toISOString();
+
+    if (asset.assigned_employee_id) {
+      releaseActiveAssignment(db, asset, {
+        reason: "Asset Deactivated",
+        remarks: options?.remarks,
+        performedBy: options?.performedBy,
+      });
+    }
+
+    asset.status = "inactive";
+
+    db.assignments.push({
+      id: genId(),
+      asset_id,
+      employee_id: "",
+      assigned_date: now.split("T")[0],
+      returned_date: null,
+      status: "inactive",
+      notes: options?.remarks?.trim() || null,
+      reason: "Asset Deactivated",
+      performed_by: options?.performedBy ?? "System",
+      created_at: now,
+    });
+
+    saveDb(db);
+    return asset;
   },
 
   getAssetRepairs: (asset_id: string): RepairRow[] => {
@@ -411,6 +662,9 @@ export const MockDB = {
     }
 
     saveDb(db);
+    if (asset) {
+      NotificationEvents.repairCompleted({ id: asset.id, asset_name: asset.asset_name });
+    }
     return repair;
   },
 

@@ -99,7 +99,7 @@ function Dashboard() {
                     {statusData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                   </Pie>
                   <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8 }} />
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: "12px", color: "var(--muted-foreground)" }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (

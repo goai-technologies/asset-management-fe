@@ -1,20 +1,24 @@
 import { createFileRoute, Outlet, redirect, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import {
-  LayoutDashboard, Boxes, LogOut, Menu, User as UserIcon, Bell, Settings,
+  LayoutDashboard, Boxes, LogOut, Menu, User as UserIcon, Settings, Users,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession, useRoles } from "@/hooks/use-auth";
+import { useUserProfile } from "@/hooks/use-user-account";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { NotificationCenter } from "@/components/notification-center";
+import { NavThemeToggle } from "@/components/theme-selector";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -29,6 +33,7 @@ export const Route = createFileRoute("/_authenticated")({
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["administrator","it_team","employee"] },
   { to: "/assets", label: "Assets", icon: Boxes, roles: ["administrator","it_team","employee"] },
+  { to: "/employees", label: "Employees", icon: Users, roles: ["administrator","it_team","employee"] },
 ] as const;
 
 function AuthedLayout() {
@@ -71,8 +76,8 @@ function SidebarInner({
           <Boxes className="h-5 w-5" />
         </div>
         <div>
-          <div className="font-bold leading-tight">EAMS</div>
-          <div className="text-[10px] uppercase tracking-wider text-sidebar-foreground/60">Asset Management</div>
+          <div className="font-bold leading-tight text-sm">goAI Asset Management</div>
+          <div className="text-[10px] tracking-wide text-sidebar-foreground/60 leading-snug">Manage, Assign & Track Company Assets</div>
         </div>
       </div>
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
@@ -97,16 +102,20 @@ function SidebarInner({
           );
         })}
       </nav>
-      <div className="p-4 border-t border-sidebar-border text-xs text-sidebar-foreground/60">
-        Signed in as <span className="text-sidebar-foreground font-medium">{roleLabel}</span>
+      <div className="p-4 border-t border-sidebar-border">
+        <div className="text-xs text-sidebar-foreground/60">
+          Signed in as <span className="text-sidebar-foreground font-medium">{roleLabel}</span>
+        </div>
       </div>
     </>
   );
 }
 
-function TopBar({ onMenu, user, roleLabel }: { onMenu: () => void; user: { email?: string } | null; roleLabel: string }) {
+function TopBar({ onMenu, user, roleLabel }: { onMenu: () => void; user: User | null; roleLabel: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { profile } = useUserProfile(user, roleLabel);
 
   const signOut = async () => {
     await queryClient.cancelQueries();
@@ -115,7 +124,10 @@ function TopBar({ onMenu, user, roleLabel }: { onMenu: () => void; user: { email
     navigate({ to: "/auth", replace: true });
   };
 
-  const initials = (user?.email ?? "?").slice(0, 2).toUpperCase();
+  const initials = (profile.fullName || user?.email || "?").slice(0, 2).toUpperCase();
+  const menuItemClass = (path: string) =>
+    cn(pathname === path && "bg-accent text-accent-foreground");
+
   return (
     <header className="h-16 bg-card border-b flex items-center justify-between px-4 md:px-6 sticky top-0 z-30">
       <div className="flex items-center gap-3">
@@ -123,19 +135,20 @@ function TopBar({ onMenu, user, roleLabel }: { onMenu: () => void; user: { email
           <Menu className="h-5 w-5" />
         </Button>
         <div className="hidden md:block">
-          <div className="text-sm text-muted-foreground">Enterprise Asset Management</div>
+          <div className="text-sm text-muted-foreground">goAI Asset Management</div>
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground">
-          <Bell className="h-5 w-5" />
-          <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-destructive"></span>
-        </Button>
+        <NotificationCenter />
+        <NavThemeToggle />
         <Badge variant="secondary" className="hidden sm:inline-flex">{roleLabel}</Badge>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2 hover:bg-muted rounded-md p-1 pr-2">
-              <Avatar className="h-8 w-8"><AvatarFallback>{initials}</AvatarFallback></Avatar>
+              <Avatar className="h-8 w-8">
+                {profile.profilePicture && <AvatarImage src={profile.profilePicture} alt={profile.fullName} />}
+                <AvatarFallback>{initials}</AvatarFallback>
+              </Avatar>
               <span className="text-sm font-medium hidden sm:inline">{user?.email}</span>
             </button>
           </DropdownMenuTrigger>
@@ -145,9 +158,15 @@ function TopBar({ onMenu, user, roleLabel }: { onMenu: () => void; user: { email
               <div className="text-xs text-muted-foreground mt-0.5">{roleLabel}</div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem disabled><UserIcon className="h-4 w-4 mr-2" />My Profile</DropdownMenuItem>
-            <DropdownMenuItem disabled><Boxes className="h-4 w-4 mr-2" />My Assets</DropdownMenuItem>
-            <DropdownMenuItem disabled><Settings className="h-4 w-4 mr-2" />Settings</DropdownMenuItem>
+            <DropdownMenuItem asChild className={menuItemClass("/profile")}>
+              <Link to="/profile"><UserIcon className="h-4 w-4 mr-2" />My Profile</Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild className={menuItemClass("/my-assets")}>
+              <Link to="/my-assets"><Boxes className="h-4 w-4 mr-2" />My Assets</Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild className={menuItemClass("/account-settings")}>
+              <Link to="/account-settings"><Settings className="h-4 w-4 mr-2" />Settings</Link>
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
               <LogOut className="h-4 w-4 mr-2" />Sign out

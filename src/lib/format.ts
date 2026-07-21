@@ -14,6 +14,7 @@ export const dateTime = (d: string | null | undefined) =>
 
 export const statusLabel = (s: string) => {
   if (s === "repair") return "Under Repair";
+  if (s === "inactive") return "Inactive";
   return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
