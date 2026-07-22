@@ -22,11 +22,14 @@ export type Database = {
           brand: string | null
           category_id: string | null
           created_at: string
+          deleted_at: string | null
           id: string
           invoice_number: string | null
+          is_deleted: boolean
           location: string | null
           model: string | null
           purchase_cost: number | null
+          purchase_cost_inr: number | null
           purchase_date: string | null
           remarks: string | null
           serial_number: string | null
@@ -43,11 +46,14 @@ export type Database = {
           brand?: string | null
           category_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           invoice_number?: string | null
+          is_deleted?: boolean
           location?: string | null
           model?: string | null
           purchase_cost?: number | null
+          purchase_cost_inr?: number | null
           purchase_date?: string | null
           remarks?: string | null
           serial_number?: string | null
@@ -64,11 +70,14 @@ export type Database = {
           brand?: string | null
           category_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           invoice_number?: string | null
+          is_deleted?: boolean
           location?: string | null
           model?: string | null
           purchase_cost?: number | null
+          purchase_cost_inr?: number | null
           purchase_date?: string | null
           remarks?: string | null
           serial_number?: string | null
@@ -107,10 +116,12 @@ export type Database = {
           asset_id: string
           assigned_date: string
           created_at: string
-          employee_id: string
+          employee_id: string | null
           expected_return_date: string | null
           id: string
           notes: string | null
+          performed_by: string | null
+          reason: string | null
           returned_date: string | null
           status: Database["public"]["Enums"]["assignment_status"]
           updated_at: string
@@ -119,10 +130,12 @@ export type Database = {
           asset_id: string
           assigned_date?: string
           created_at?: string
-          employee_id: string
+          employee_id?: string | null
           expected_return_date?: string | null
           id?: string
           notes?: string | null
+          performed_by?: string | null
+          reason?: string | null
           returned_date?: string | null
           status?: Database["public"]["Enums"]["assignment_status"]
           updated_at?: string
@@ -131,10 +144,12 @@ export type Database = {
           asset_id?: string
           assigned_date?: string
           created_at?: string
-          employee_id?: string
+          employee_id?: string | null
           expected_return_date?: string | null
           id?: string
           notes?: string | null
+          performed_by?: string | null
+          reason?: string | null
           returned_date?: string | null
           status?: Database["public"]["Enums"]["assignment_status"]
           updated_at?: string
@@ -160,17 +175,29 @@ export type Database = {
         Row: {
           category_name: string
           created_at: string
+          description: string | null
+          icon: string | null
           id: string
+          status: Database["public"]["Enums"]["entity_status"]
+          updated_at: string
         }
         Insert: {
           category_name: string
           created_at?: string
+          description?: string | null
+          icon?: string | null
           id?: string
+          status?: Database["public"]["Enums"]["entity_status"]
+          updated_at?: string
         }
         Update: {
           category_name?: string
           created_at?: string
+          description?: string | null
+          icon?: string | null
           id?: string
+          status?: Database["public"]["Enums"]["entity_status"]
+          updated_at?: string
         }
         Relationships: []
       }
@@ -185,6 +212,8 @@ export type Database = {
           location: string | null
           manager: string | null
           name: string
+          phone: string | null
+          status: Database["public"]["Enums"]["entity_status"]
           updated_at: string
           user_id: string | null
         }
@@ -198,6 +227,8 @@ export type Database = {
           location?: string | null
           manager?: string | null
           name: string
+          phone?: string | null
+          status?: Database["public"]["Enums"]["entity_status"]
           updated_at?: string
           user_id?: string | null
         }
@@ -211,6 +242,8 @@ export type Database = {
           location?: string | null
           manager?: string | null
           name?: string
+          phone?: string | null
+          status?: Database["public"]["Enums"]["entity_status"]
           updated_at?: string
           user_id?: string | null
         }
@@ -242,15 +275,20 @@ export type Database = {
       }
       repairs: {
         Row: {
+          actual_return_date: string | null
           asset_id: string
+          completed_at: string | null
           completed_date: string | null
           created_at: string
+          expected_return_date: string | null
           id: string
           issue: string
           notes: string | null
           repair_cost: number | null
           repair_date: string
+          repair_notes: string | null
           status: Database["public"]["Enums"]["repair_status"]
+          unassign_reason: string | null
           updated_at: string
           vendor_id: string | null
         }
@@ -324,36 +362,122 @@ export type Database = {
           contact_person: string | null
           created_at: string
           email: string | null
+          gst_number: string | null
           id: string
+          notes: string | null
+          office_address: string | null
           phone: string | null
+          status: Database["public"]["Enums"]["entity_status"]
           updated_at: string
+          vendor_code: string
           vendor_name: string
+          vendor_type: string | null
+          website: string | null
         }
         Insert: {
           address?: string | null
           contact_person?: string | null
           created_at?: string
           email?: string | null
+          gst_number?: string | null
           id?: string
+          notes?: string | null
+          office_address?: string | null
           phone?: string | null
+          status?: Database["public"]["Enums"]["entity_status"]
           updated_at?: string
+          vendor_code?: string
           vendor_name: string
+          vendor_type?: string | null
+          website?: string | null
         }
         Update: {
           address?: string | null
           contact_person?: string | null
           created_at?: string
           email?: string | null
+          gst_number?: string | null
           id?: string
+          notes?: string | null
+          office_address?: string | null
           phone?: string | null
+          status?: Database["public"]["Enums"]["entity_status"]
           updated_at?: string
+          vendor_code?: string
           vendor_name?: string
+          vendor_type?: string | null
+          website?: string | null
         }
         Relationships: []
       }
     }
     Views: {
-      [_ in never]: never
+      dashboard_assets_by_category: {
+        Row: {
+          asset_count: number | null
+          category_name: string | null
+        }
+        Relationships: []
+      }
+      dashboard_assets_by_status: {
+        Row: {
+          asset_count: number | null
+          status: string | null
+        }
+        Relationships: []
+      }
+      dashboard_open_repairs: {
+        Row: {
+          asset_code: string | null
+          asset_id: string | null
+          asset_name: string | null
+          expected_return_date: string | null
+          repair_cost: number | null
+          repair_date: string | null
+          repair_id: string | null
+          repair_status: string | null
+          vendor_name: string | null
+        }
+        Relationships: []
+      }
+      dashboard_recent_activity: {
+        Row: {
+          asset_code: string | null
+          asset_name: string | null
+          assigned_date: string | null
+          assignment_status: string | null
+          created_at: string | null
+          employee_name: string | null
+          id: string | null
+          notes: string | null
+          performed_by: string | null
+          reason: string | null
+          returned_date: string | null
+        }
+        Relationships: []
+      }
+      dashboard_summary: {
+        Row: {
+          assigned_assets: number | null
+          available_assets: number | null
+          open_repair_tickets: number | null
+          retired_assets: number | null
+          total_assets: number | null
+          total_employees: number | null
+          under_repair_assets: number | null
+        }
+        Relationships: []
+      }
+      dashboard_warranty_expiring: {
+        Row: {
+          asset_code: string | null
+          asset_id: string | null
+          asset_name: string | null
+          days_until_expiry: number | null
+          warranty_expiry: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {
@@ -375,7 +499,23 @@ export type Database = {
         | "lost"
         | "disposed"
         | "retired"
-      assignment_status: "active" | "returned" | "overdue"
+        | "inactive"
+      assignment_status:
+        | "active"
+        | "returned"
+        | "overdue"
+        | "assigned"
+        | "unassigned"
+        | "disposed"
+        | "inactive"
+      entity_status: "active" | "inactive"
+      notification_type:
+        | "asset"
+        | "assignment"
+        | "repair"
+        | "warranty"
+        | "employee"
+        | "system"
       repair_status: "pending" | "in_progress" | "completed" | "cancelled"
     }
     CompositeTypes: {
@@ -513,8 +653,26 @@ export const Constants = {
         "lost",
         "disposed",
         "retired",
+        "inactive",
       ],
-      assignment_status: ["active", "returned", "overdue"],
+      assignment_status: [
+        "active",
+        "returned",
+        "overdue",
+        "assigned",
+        "unassigned",
+        "disposed",
+        "inactive",
+      ],
+      entity_status: ["active", "inactive"],
+      notification_type: [
+        "asset",
+        "assignment",
+        "repair",
+        "warranty",
+        "employee",
+        "system",
+      ],
       repair_status: ["pending", "in_progress", "completed", "cancelled"],
     },
   },

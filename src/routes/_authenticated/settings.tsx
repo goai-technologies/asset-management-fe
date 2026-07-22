@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { ArchivedAssetsPanel } from "@/components/archived-assets-panel";
+import { DataRecoveryPanel } from "@/components/data-recovery-panel";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -110,6 +111,10 @@ function SettingsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <div className="mt-6">
+        <DataRecoveryPanel />
+      </div>
 
       <div className="mt-6">
         <ArchivedAssetsPanel />

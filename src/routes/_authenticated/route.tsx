@@ -3,9 +3,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import {
-  LayoutDashboard, Boxes, LogOut, Menu, User as UserIcon, Settings, Users,
+  LayoutDashboard, Boxes, LogOut, Menu, User as UserIcon, Settings, Users, Store, FolderTree,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { initAssetDbFromSupabase } from "@/lib/mock-db";
 import { useSession, useRoles } from "@/hooks/use-auth";
 import { useUserProfile } from "@/hooks/use-user-account";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async () => {
     const { data } = await supabase.auth.getSession();
     if (!data.session) throw redirect({ to: "/auth" });
+    await initAssetDbFromSupabase();
     return { user: data.session.user };
   },
   component: AuthedLayout,
@@ -34,6 +36,8 @@ const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["administrator","it_team","employee"] },
   { to: "/assets", label: "Assets", icon: Boxes, roles: ["administrator","it_team","employee"] },
   { to: "/employees", label: "Employees", icon: Users, roles: ["administrator","it_team","employee"] },
+  { to: "/categories", label: "Categories", icon: FolderTree, roles: ["administrator","it_team","employee"] },
+  { to: "/vendor-management", label: "Vendor Management", icon: Store, roles: ["administrator","it_team","employee"] },
 ] as const;
 
 function AuthedLayout() {

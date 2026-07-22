@@ -1,0 +1,107 @@
+{
+  "categories": [
+    {
+      "id": "c1",
+      "category_name": "Laptops"
+    },
+    {
+      "id": "c2",
+      "category_name": "Monitors"
+    },
+    {
+      "id": "c3",
+      "category_name": "Phones"
+    },
+    {
+      "id": "c4",
+      "category_name": "Peripherals"
+    }
+  ],
+  "vendors": [
+    {
+      "id": "v1",
+      "vendor_name": "Dell Technologies"
+    },
+    {
+      "id": "v2",
+      "vendor_name": "Apple Inc."
+    },
+    {
+      "id": "v3",
+      "vendor_name": "Amazon Business"
+    }
+  ],
+  "employees": [
+    {
+      "id": "e1",
+      "name": "John Doe",
+      "email": "john@example.com",
+      "department": "Engineering",
+      "designation": "Developer",
+      "location": "New York"
+    },
+    {
+      "id": "e2",
+      "name": "Jane Smith",
+      "email": "jane@example.com",
+      "department": "Design",
+      "designation": "UI/UX Designer",
+      "location": "San Francisco"
+    }
+  ],
+  "assets": [
+    {
+      "id": "a1",
+      "asset_code": "LT-2001",
+      "asset_name": "MacBook Pro M2",
+      "category_id": "c1",
+      "brand": "Apple",
+      "model": "14-inch 2023",
+      "serial_number": "C02G123456",
+      "purchase_date": "2023-01-15",
+      "purchase_cost": null,
+      "purchase_cost_inr": 199900,
+      "invoice_number": "INV-2023-0015",
+      "vendor_id": "v2",
+      "warranty_expiry": "2026-01-15",
+      "status": "assigned",
+      "location": "New York",
+      "remarks": "",
+      "assigned_employee_id": "e1",
+      "created_at": "2026-07-20T10:31:21.593Z"
+    },
+    {
+      "id": "a2",
+      "asset_code": "MN-1002",
+      "asset_name": "Dell UltraSharp 27",
+      "category_id": "c2",
+      "brand": "Dell",
+      "model": "U2723QE",
+      "serial_number": "CN-0V00V0",
+      "purchase_date": "2022-11-20",
+      "purchase_cost": null,
+      "purchase_cost_inr": 49800,
+      "invoice_number": "INV-2022-1120",
+      "vendor_id": "v1",
+      "warranty_expiry": "2025-11-20",
+      "status": "available",
+      "location": "HQ Storage",
+      "remarks": "",
+      "assigned_employee_id": null,
+      "created_at": "2026-07-20T10:31:21.594Z"
+    }
+  ],
+  "assignments": [
+    {
+      "id": "as1",
+      "asset_id": "a1",
+      "employee_id": "e1",
+      "assigned_date": "2023-02-01",
+      "returned_date": null,
+      "status": "assigned",
+      "notes": "Initial setup",
+      "created_at": "2026-07-20T10:31:21.594Z"
+    }
+  ],
+  "repairs": []
+}

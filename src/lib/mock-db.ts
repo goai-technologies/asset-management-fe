@@ -1,8 +1,51 @@
 import { getAssetImageStorage } from "@/lib/asset-images";
+import {
+  initAssetDbFromSupabase as bootstrapAssetDbFromSupabase,
+  scheduleAssetDbPersist,
+} from "@/lib/db/supabase-persistence";
 import { NotificationEvents } from "@/lib/notifications";
 
-export type Category = { id: string; category_name: string };
-export type Vendor = { id: string; vendor_name: string };
+export type Category = {
+  id: string;
+  category_name: string;
+  description?: string | null;
+  status?: "active" | "inactive";
+  icon?: string | null;
+};
+
+export type CategoryRow = Category & {
+  asset_count: number;
+};
+
+export const VENDOR_TYPES = [
+  "Hardware Supplier",
+  "Software Vendor",
+  "Repair Service",
+  "Logistics",
+  "General Supplier",
+  "Other",
+] as const;
+
+export type VendorType = (typeof VENDOR_TYPES)[number];
+
+export type Vendor = {
+  id: string;
+  vendor_code: string;
+  vendor_name: string;
+  contact_person?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  office_address?: string | null;
+  vendor_type?: VendorType | string | null;
+  status?: "active" | "inactive";
+  website?: string | null;
+  gst_number?: string | null;
+  notes?: string | null;
+};
+
+export type VendorRow = Vendor & {
+  linked_asset_count: number;
+};
 export type Employee = {
   id: string;
   employee_code: string;
@@ -115,15 +158,54 @@ type DBSchema = {
 
 const DEFAULT_DB: DBSchema = {
   categories: [
-    { id: "c1", category_name: "Laptops" },
-    { id: "c2", category_name: "Monitors" },
-    { id: "c3", category_name: "Phones" },
-    { id: "c4", category_name: "Peripherals" },
+    { id: "c1", category_name: "Laptops", description: "Portable computers and notebooks", status: "active", icon: "laptop" },
+    { id: "c2", category_name: "Monitors", description: "Displays and external screens", status: "active", icon: "monitor" },
+    { id: "c3", category_name: "Phones", description: "Mobile phones and smartphones", status: "active", icon: "smartphone" },
+    { id: "c4", category_name: "Peripherals", description: "Keyboards, mice, and accessories", status: "active", icon: "keyboard" },
   ],
   vendors: [
-    { id: "v1", vendor_name: "Dell Technologies" },
-    { id: "v2", vendor_name: "Apple Inc." },
-    { id: "v3", vendor_name: "Amazon Business" },
+    {
+      id: "v1",
+      vendor_code: "VND-1001",
+      vendor_name: "Dell Technologies",
+      contact_person: "Sarah Johnson",
+      email: "procurement@dell.com",
+      phone: "+1 800-289-3355",
+      office_address: "One Dell Way, Round Rock, TX 78682, USA",
+      vendor_type: "Hardware Supplier",
+      status: "active",
+      website: "https://www.dell.com",
+      gst_number: null,
+      notes: "Primary laptop and monitor supplier.",
+    },
+    {
+      id: "v2",
+      vendor_code: "VND-1002",
+      vendor_name: "Apple Inc.",
+      contact_person: "Michael Chen",
+      email: "business@apple.com",
+      phone: "+1 800-854-3680",
+      office_address: "One Apple Park Way, Cupertino, CA 95014, USA",
+      vendor_type: "Hardware Supplier",
+      status: "active",
+      website: "https://www.apple.com",
+      gst_number: null,
+      notes: "MacBook and iPhone procurement.",
+    },
+    {
+      id: "v3",
+      vendor_code: "VND-1003",
+      vendor_name: "Amazon Business",
+      contact_person: "Alex Rivera",
+      email: "support@amazonbusiness.com",
+      phone: "+1 888-281-3847",
+      office_address: "410 Terry Ave N, Seattle, WA 98109, USA",
+      vendor_type: "General Supplier",
+      status: "active",
+      website: "https://business.amazon.com",
+      gst_number: null,
+      notes: "Peripherals and office supplies.",
+    },
   ],
   employees: [
     { id: "e1", employee_code: "EMP-1001", name: "John Doe", email: "john@example.com", phone: "+1 555-0101", department: "Engineering", designation: "Developer", location: "New York", status: "active" },
@@ -176,21 +258,60 @@ function getDb(): DBSchema {
     }
     return next;
   });
+  parsed.vendors = parsed.vendors.map((v, i) => {
+    let next = v;
+    if (!v.vendor_code) {
+      needsSave = true;
+      next = { ...next, vendor_code: `VND-${1001 + i}` };
+    }
+    if (next.status === undefined) {
+      needsSave = true;
+      next = { ...next, status: "active" as const };
+    }
+    if (next.vendor_type === undefined) {
+      needsSave = true;
+      next = { ...next, vendor_type: "General Supplier" };
+    }
+    return next;
+  });
+  parsed.categories = parsed.categories.map((c) => {
+    let next = c;
+    if (next.status === undefined) {
+      needsSave = true;
+      next = { ...next, status: "active" as const };
+    }
+    return next;
+  });
   if (needsSave) saveDb(parsed);
   return parsed;
 }
 
 function saveDb(db: DBSchema) {
   localStorage.setItem(DB_KEY, JSON.stringify(db));
+  scheduleAssetDbPersist(db);
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("eams:mock-db-changed"));
   }
+}
+
+/** Hydrate in-memory cache from Supabase (or migrate local data on first run). */
+export function initAssetDbFromSupabase(): Promise<unknown> {
+  return bootstrapAssetDbFromSupabase(
+    () => getDb(),
+    (snapshot) => {
+      localStorage.setItem(DB_KEY, JSON.stringify(snapshot));
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("eams:mock-db-changed"));
+      }
+    },
+  );
 }
 
 // Generate unique ID
 export const genId = () => Math.random().toString(36).substring(2, 9);
 export const genAssetCode = (cat: string) => `${cat.substring(0,2).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
 export const genEmployeeCode = () => `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
+export const genVendorCode = () => `VND-${Math.floor(1000 + Math.random() * 9000)}`;
 
 function isActiveAsset(asset: Asset): boolean {
   return !asset.isDeleted;
@@ -253,9 +374,144 @@ function joinEmployeeRow(db: DBSchema, employee: Employee): EmployeeRow {
   };
 }
 
+function countLinkedAssets(db: DBSchema, vendor_id: string): number {
+  return db.assets.filter((a) => isActiveAsset(a) && a.vendor_id === vendor_id).length;
+}
+
+function countCategoryAssets(db: DBSchema, category_id: string): number {
+  return db.assets.filter((a) => isActiveAsset(a) && a.category_id === category_id).length;
+}
+
+function joinCategoryRow(db: DBSchema, category: Category): CategoryRow {
+  return {
+    ...category,
+    status: category.status ?? "active",
+    asset_count: countCategoryAssets(db, category.id),
+  };
+}
+
+function joinVendorRow(db: DBSchema, vendor: Vendor): VendorRow {
+  return {
+    ...vendor,
+    status: vendor.status ?? "active",
+    linked_asset_count: countLinkedAssets(db, vendor.id),
+  };
+}
+
 export const MockDB = {
   getCategories: () => getDb().categories,
+
+  getActiveCategories: (): Category[] => {
+    return getDb().categories.filter((c) => (c.status ?? "active") === "active");
+  },
+
+  getCategoryRows: (): CategoryRow[] => {
+    const db = getDb();
+    return db.categories.map((c) => joinCategoryRow(db, c));
+  },
+
+  getCategoryById: (id: string): CategoryRow | null => {
+    const db = getDb();
+    const category = db.categories.find((c) => c.id === id);
+    return category ? joinCategoryRow(db, category) : null;
+  },
+
+  getCategoryAssetCount: (category_id: string): number => {
+    return countCategoryAssets(getDb(), category_id);
+  },
+
+  addCategory: (category: Omit<Category, "id">) => {
+    const db = getDb();
+    const newCategory: Category = {
+      ...category,
+      id: genId(),
+      status: category.status ?? "active",
+    };
+    db.categories.push(newCategory);
+    saveDb(db);
+    return newCategory;
+  },
+
+  updateCategory: (id: string, updates: Partial<Omit<Category, "id">>) => {
+    const db = getDb();
+    const idx = db.categories.findIndex((c) => c.id === id);
+    if (idx === -1) throw new Error("Category not found");
+    db.categories[idx] = { ...db.categories[idx], ...updates };
+    saveDb(db);
+    return db.categories[idx];
+  },
+
+  deleteCategory: (id: string) => {
+    const db = getDb();
+    const category = db.categories.find((c) => c.id === id);
+    if (!category) throw new Error("Category not found");
+
+    const assetCount = countCategoryAssets(db, id);
+    if (assetCount > 0) {
+      const error = new Error("LINKED_ASSETS") as Error & { assetCount: number };
+      error.assetCount = assetCount;
+      throw error;
+    }
+
+    db.categories = db.categories.filter((c) => c.id !== id);
+    saveDb(db);
+  },
+
   getVendors: () => getDb().vendors,
+
+  getVendorRows: (): VendorRow[] => {
+    const db = getDb();
+    return db.vendors.map((v) => joinVendorRow(db, v));
+  },
+
+  getVendorById: (id: string): VendorRow | null => {
+    const db = getDb();
+    const vendor = db.vendors.find((v) => v.id === id);
+    return vendor ? joinVendorRow(db, vendor) : null;
+  },
+
+  getVendorLinkedAssetCount: (vendor_id: string): number => {
+    return countLinkedAssets(getDb(), vendor_id);
+  },
+
+  addVendor: (vendor: Omit<Vendor, "id" | "vendor_code"> & { vendor_code?: string }) => {
+    const db = getDb();
+    const newVendor: Vendor = {
+      ...vendor,
+      id: genId(),
+      vendor_code: vendor.vendor_code || genVendorCode(),
+      status: vendor.status ?? "active",
+    };
+    db.vendors.push(newVendor);
+    saveDb(db);
+    return newVendor;
+  },
+
+  updateVendor: (id: string, updates: Partial<Omit<Vendor, "id">>) => {
+    const db = getDb();
+    const idx = db.vendors.findIndex((v) => v.id === id);
+    if (idx === -1) throw new Error("Vendor not found");
+    db.vendors[idx] = { ...db.vendors[idx], ...updates };
+    saveDb(db);
+    return db.vendors[idx];
+  },
+
+  deleteVendor: (id: string) => {
+    const db = getDb();
+    const vendor = db.vendors.find((v) => v.id === id);
+    if (!vendor) throw new Error("Vendor not found");
+
+    const linkedCount = countLinkedAssets(db, id);
+    if (linkedCount > 0) {
+      const error = new Error("LINKED_ASSETS") as Error & { linkedCount: number };
+      error.linkedCount = linkedCount;
+      throw error;
+    }
+
+    db.vendors = db.vendors.filter((v) => v.id !== id);
+    saveDb(db);
+  },
+
   getEmployees: () => getDb().employees,
 
   getEmployeeRows: (): EmployeeRow[] => {
@@ -716,5 +972,43 @@ export const MockDB = {
         assets: db.assets.find((a) => a.id === r.asset_id) || null,
         vendors: db.vendors.find((v) => v.id === r.vendor_id) || null,
       }));
+  },
+
+  exportSnapshot: () => {
+    const db = getDb();
+    return {
+      categories: db.categories,
+      vendors: db.vendors,
+      employees: db.employees,
+      assets: db.assets,
+      assignments: db.assignments,
+      repairs: db.repairs,
+    };
+  },
+
+  importSnapshot: (data: {
+    categories: Category[];
+    vendors: Vendor[];
+    employees: Employee[];
+    assets: Asset[];
+    assignments: Assignment[];
+    repairs?: Repair[];
+  }) => {
+    if (!Array.isArray(data.categories) || !Array.isArray(data.employees) || !Array.isArray(data.assets)) {
+      throw new Error("INVALID_BACKUP");
+    }
+    const db: DBSchema = {
+      categories: data.categories,
+      vendors: data.vendors ?? [],
+      employees: data.employees,
+      assets: data.assets,
+      assignments: data.assignments ?? [],
+      repairs: data.repairs ?? [],
+    };
+    saveDb(db);
+    return {
+      employees: db.employees.length,
+      assets: db.assets.length,
+    };
   },
 };
