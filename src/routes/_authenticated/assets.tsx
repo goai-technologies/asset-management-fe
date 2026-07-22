@@ -505,6 +505,9 @@ function AssignmentHistoryList({ assetId }: { assetId: string }) {
                 <div className="font-medium text-sm">
                   Assigned To: {entry.employees?.name ?? "—"}
                 </div>
+                <div className="text-sm text-muted-foreground mt-1">
+                  Serial Number: {entry.assets?.serial_number?.trim() || "—"}
+                </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   Assigned On: {dateTime(entry.assigned_date)}
                 </div>
@@ -514,6 +517,9 @@ function AssignmentHistoryList({ assetId }: { assetId: string }) {
                 <div className="font-medium text-sm">
                   {entry.status === "returned" ? "Returned by" : "Assigned to"}{" "}
                   {entry.employees?.name ?? "—"}
+                </div>
+                <div className="text-sm text-muted-foreground mt-1">
+                  Serial Number: {entry.assets?.serial_number?.trim() || "—"}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   {entry.status === "returned" && entry.returned_date

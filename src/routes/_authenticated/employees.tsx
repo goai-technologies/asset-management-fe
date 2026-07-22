@@ -406,6 +406,9 @@ function AssignmentHistoryList({ employeeId, refreshTick }: { employeeId: string
                   Asset: {entry.assets?.asset_name ?? "—"} ({entry.assets?.asset_code ?? "—"})
                 </div>
                 <div className="text-sm text-muted-foreground mt-0.5">
+                  Serial Number: {entry.assets?.serial_number?.trim() || "—"}
+                </div>
+                <div className="text-sm text-muted-foreground mt-0.5">
                   Unassigned On: {dateTime(entry.assigned_date)}
                 </div>
                 <div className="text-sm text-muted-foreground mt-0.5">
@@ -417,6 +420,9 @@ function AssignmentHistoryList({ employeeId, refreshTick }: { employeeId: string
                 <div className="font-medium text-sm">Asset Assigned</div>
                 <div className="text-sm text-muted-foreground mt-1">
                   Asset: {entry.assets?.asset_name ?? "—"} ({entry.assets?.asset_code ?? "—"})
+                </div>
+                <div className="text-sm text-muted-foreground mt-0.5">
+                  Serial Number: {entry.assets?.serial_number?.trim() || "—"}
                 </div>
                 <div className="text-sm text-muted-foreground mt-0.5">
                   Assigned On: {dateTime(entry.assigned_date)}

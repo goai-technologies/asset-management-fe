@@ -52,7 +52,7 @@ function mapCategory(row: Record<string, unknown>): Category {
 function mapVendor(row: Record<string, unknown>): Vendor {
   return {
     id: String(row.id),
-    vendor_code: String(row.vendor_code),
+    vendor_code: String(row.vendor_code ?? `VND-${String(row.id).slice(0, 8)}`),
     vendor_name: String(row.vendor_name),
     contact_person: (row.contact_person as string | null) ?? null,
     email: (row.email as string | null) ?? null,
@@ -153,6 +153,23 @@ function mapRepair(row: Record<string, unknown>): Repair {
   };
 }
 
+function toDbAssignmentStatus(status: string): string {
+  switch (status) {
+    case "assigned":
+      return "active";
+    case "unassigned":
+    case "disposed":
+    case "inactive":
+      return "returned";
+    default:
+      return status;
+  }
+}
+
+function toDbAssetStatus(status: string): string {
+  return status === "inactive" ? "retired" : status;
+}
+
 function normalizeSnapshotIds(snapshot: AssetDbSnapshot): AssetDbSnapshot {
   const idMap = new Map<string, string>();
 
@@ -242,8 +259,8 @@ export async function loadAssetDbFromSupabase(): Promise<AssetDbSnapshot | null>
 
 export async function persistAssetDbToSupabase(
   snapshot: AssetDbSnapshot,
-): Promise<AssetDbSnapshot> {
-  if (!isSupabasePersistenceEnabled()) return snapshot;
+): Promise<{ snapshot: AssetDbSnapshot; ok: boolean }> {
+  if (!isSupabasePersistenceEnabled()) return { snapshot, ok: false };
 
   const normalized = normalizeSnapshotIds(snapshot);
 
@@ -296,7 +313,7 @@ export async function persistAssetDbToSupabase(
     invoice_number: a.invoice_number ?? null,
     vendor_id: a.vendor_id ? ensureUuid(a.vendor_id) : null,
     warranty_expiry: toDateOnly(a.warranty_expiry),
-    status: a.status,
+    status: toDbAssetStatus(a.status),
     assigned_employee_id: a.assigned_employee_id
       ? ensureUuid(a.assigned_employee_id)
       : null,
@@ -313,7 +330,7 @@ export async function persistAssetDbToSupabase(
     employee_id: a.employee_id ? ensureUuid(a.employee_id) : null,
     assigned_date: toDateOnly(a.assigned_date) ?? a.assigned_date,
     returned_date: toDateOnly(a.returned_date),
-    status: a.status,
+    status: toDbAssignmentStatus(a.status),
     notes: a.notes ?? null,
     reason: a.reason ?? null,
     performed_by: a.performed_by ?? null,
@@ -336,16 +353,7 @@ export async function persistAssetDbToSupabase(
     created_at: r.created_at,
   }));
 
-  const deleteOrder = [
-    "repairs",
-    "assignments",
-    "assets",
-    "employees",
-    "vendors",
-    "categories",
-  ] as const;
-
-  const insertOrder = [
+  const upsertOrder = [
     { name: "categories" as const, rows: categoryRows },
     { name: "vendors" as const, rows: vendorRows },
     { name: "employees" as const, rows: employeeRows },
@@ -354,43 +362,198 @@ export async function persistAssetDbToSupabase(
     { name: "repairs" as const, rows: repairRows },
   ];
 
-  for (const tableName of deleteOrder) {
-    const { error: deleteError } = await supabase
-      .from(tableName)
-      .delete()
-      .neq("id", "00000000-0000-0000-0000-000000000000");
+  async function upsertTable(
+    name: (typeof upsertOrder)[number]["name"],
+    rows: Record<string, unknown>[],
+    fallbackRows?: Record<string, unknown>[],
+  ): Promise<boolean> {
+    if (rows.length === 0) return true;
 
-    if (deleteError) {
-      console.warn(`[AssetDB] Supabase clear ${tableName} failed:`, deleteError.message);
-      return snapshot;
+    const { error } = await supabase.from(name).upsert(rows, { onConflict: "id" });
+    if (!error) return true;
+
+    if (fallbackRows) {
+      const { error: retryError } = await supabase
+        .from(name)
+        .upsert(fallbackRows, { onConflict: "id" });
+      if (!retryError) return true;
+      console.error(`[AssetDB] Supabase upsert ${name} failed:`, retryError.message);
+      return false;
     }
+
+    console.error(`[AssetDB] Supabase upsert ${name} failed:`, error.message);
+    return false;
   }
 
-  for (const table of insertOrder) {
-    if (table.rows.length === 0) continue;
+  const vendorFallback = normalized.vendors.map((v) => ({
+    id: ensureUuid(v.id),
+    vendor_name: v.vendor_name,
+    contact_person: v.contact_person ?? null,
+    email: v.email ?? null,
+    phone: v.phone ?? null,
+    address: v.office_address ?? null,
+  }));
 
-    const { error: insertError } = await supabase.from(table.name).insert(table.rows);
-    if (insertError) {
-      console.warn(`[AssetDB] Supabase persist ${table.name} failed:`, insertError.message);
-      return snapshot;
-    }
+  const categoryFallback = normalized.categories.map((c) => ({
+    id: ensureUuid(c.id),
+    category_name: c.category_name,
+  }));
+
+  const employeeFallback = normalized.employees.map((e) => ({
+    id: ensureUuid(e.id),
+    employee_code: e.employee_code,
+    name: e.name,
+    email: e.email,
+    department: e.department ?? null,
+    designation: e.designation ?? null,
+    location: e.location ?? null,
+  }));
+
+  const assetFallback = normalized.assets.map((a) => ({
+    id: ensureUuid(a.id),
+    asset_code: a.asset_code,
+    asset_name: a.asset_name,
+    category_id: a.category_id ? ensureUuid(a.category_id) : null,
+    brand: a.brand ?? null,
+    model: a.model ?? null,
+    serial_number: a.serial_number ?? null,
+    purchase_date: toDateOnly(a.purchase_date),
+    purchase_cost: a.purchase_cost ?? a.purchase_cost_inr ?? null,
+    invoice_number: a.invoice_number ?? null,
+    vendor_id: a.vendor_id ? ensureUuid(a.vendor_id) : null,
+    warranty_expiry: toDateOnly(a.warranty_expiry),
+    status: toDbAssetStatus(a.status),
+    assigned_employee_id: a.assigned_employee_id
+      ? ensureUuid(a.assigned_employee_id)
+      : null,
+    location: a.location ?? null,
+    remarks: a.remarks ?? null,
+    created_at: a.created_at,
+  }));
+
+  const assignmentFallback = normalized.assignments.map((a) => ({
+    id: ensureUuid(a.id),
+    asset_id: ensureUuid(a.asset_id),
+    employee_id: a.employee_id ? ensureUuid(a.employee_id) : null,
+    assigned_date: toDateOnly(a.assigned_date) ?? a.assigned_date,
+    returned_date: toDateOnly(a.returned_date),
+    status: toDbAssignmentStatus(a.status),
+    notes: a.notes ?? null,
+    created_at: a.created_at,
+  }));
+
+  const repairFallback = normalized.repairs.map((r) => ({
+    id: ensureUuid(r.id),
+    asset_id: ensureUuid(r.asset_id),
+    vendor_id: r.vendor_id ? ensureUuid(r.vendor_id) : null,
+    issue: r.unassign_reason ?? "Repair",
+    repair_cost: r.repair_cost ?? null,
+    status: r.status,
+    repair_date: toDateOnly(r.created_at) ?? new Date().toISOString().split("T")[0],
+    notes: r.repair_notes ?? null,
+    created_at: r.created_at,
+  }));
+
+  const fallbacks: Record<string, Record<string, unknown>[]> = {
+    categories: categoryFallback,
+    vendors: vendorFallback,
+    employees: employeeFallback,
+    assets: assetFallback,
+    assignments: assignmentFallback,
+    repairs: repairFallback,
+  };
+
+  for (const table of upsertOrder) {
+    const ok = await upsertTable(table.name, table.rows, fallbacks[table.name]);
+    if (!ok) return { snapshot, ok: false };
   }
 
-  return normalized;
+  return { snapshot: normalized, ok: true };
 }
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
+let persistInFlight: Promise<void> | null = null;
 
 export function scheduleAssetDbPersist(snapshot: AssetDbSnapshot) {
   if (!isSupabasePersistenceEnabled()) return;
   if (persistTimer) clearTimeout(persistTimer);
   persistTimer = setTimeout(() => {
-    void persistAssetDbToSupabase(snapshot).then((migrated) => {
-      if (typeof window !== "undefined") {
-        localStorage.setItem("eams_mock_db", JSON.stringify(migrated));
-      }
+    persistTimer = null;
+    persistInFlight = persistAssetDbToSupabase(snapshot).then(({ snapshot: migrated, ok }) => {
+      persistInFlight = null;
+      if (!ok || typeof window === "undefined") return;
+      localStorage.setItem("eams_mock_db", JSON.stringify(migrated));
+      window.dispatchEvent(new CustomEvent("eams:mock-db-changed"));
     });
-  }, 400);
+  }, 150);
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", () => {
+    if (persistTimer) {
+      clearTimeout(persistTimer);
+      persistTimer = null;
+      const raw = localStorage.getItem("eams_mock_db");
+      if (raw) {
+        try {
+          const snapshot = JSON.parse(raw) as AssetDbSnapshot;
+          void persistAssetDbToSupabase(snapshot);
+        } catch {
+          // ignore malformed cache
+        }
+      }
+    }
+  });
+}
+
+/** Wait for any pending Supabase write before navigating away or reloading. */
+export function flushAssetDbPersist(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+
+  const runFlush = (snapshot: AssetDbSnapshot) => {
+    persistInFlight = persistAssetDbToSupabase(snapshot).then(({ snapshot: migrated, ok }) => {
+      persistInFlight = null;
+      if (!ok || typeof window === "undefined") return;
+      localStorage.setItem("eams_mock_db", JSON.stringify(migrated));
+      window.dispatchEvent(new CustomEvent("eams:mock-db-changed"));
+    });
+    return persistInFlight;
+  };
+
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+    const raw = localStorage.getItem("eams_mock_db");
+    if (raw) {
+      try {
+        return runFlush(JSON.parse(raw) as AssetDbSnapshot);
+      } catch {
+        return persistInFlight ?? Promise.resolve();
+      }
+    }
+  }
+
+  return persistInFlight ?? Promise.resolve();
+}
+
+function countRecords(snapshot: AssetDbSnapshot): number {
+  return (
+    snapshot.categories.length +
+    snapshot.vendors.length +
+    snapshot.employees.length +
+    snapshot.assets.length +
+    snapshot.assignments.length +
+    snapshot.repairs.length
+  );
+}
+
+function hasUserData(snapshot: AssetDbSnapshot): boolean {
+  return (
+    snapshot.assets.length > 0 ||
+    snapshot.employees.length > 0 ||
+    snapshot.categories.length > 0 ||
+    snapshot.vendors.length > 0
+  );
 }
 
 let initPromise: Promise<AssetDbSnapshot | null> | null = null;
@@ -403,25 +566,40 @@ export function initAssetDbFromSupabase(
 
   if (!initPromise) {
     initPromise = (async () => {
-      const remote = await loadAssetDbFromSupabase();
-      if (remote) {
-        applySnapshot(remote);
-        return remote;
+      try {
+        if (typeof window === "undefined") return null;
+
+        const local = getLocalSnapshot();
+        const remote = await loadAssetDbFromSupabase();
+
+        // Prefer local data when the user has been working in this browser.
+        if (hasUserData(local)) {
+          const localCount = countRecords(local);
+          const remoteCount = remote ? countRecords(remote) : 0;
+
+          if (!remote || localCount >= remoteCount) {
+            const { snapshot: synced, ok } = await persistAssetDbToSupabase(local);
+            applySnapshot(synced);
+            if (!ok) {
+              console.warn(
+                "[AssetDB] Could not sync to Supabase — data is kept in this browser. " +
+                  "Ensure you are logged in as Admin/IT and migrations are applied.",
+              );
+            }
+            return synced;
+          }
+        }
+
+        if (remote) {
+          applySnapshot(remote);
+          return remote;
+        }
+
+        return null;
+      } catch (error) {
+        console.error("[AssetDB] Init failed:", error);
+        return null;
       }
-
-      const local = getLocalSnapshot();
-      const hasLocalData =
-        local.assets.length > 0 ||
-        local.employees.length > 0 ||
-        local.categories.length > 0;
-
-      if (hasLocalData) {
-        const migrated = await persistAssetDbToSupabase(local);
-        applySnapshot(migrated);
-        return migrated;
-      }
-
-      return null;
     })();
   }
 

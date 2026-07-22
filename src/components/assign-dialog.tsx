@@ -27,6 +27,9 @@ export function AssignDialog({
   const [saving, setSaving] = useState(false);
   const [availableAssets, setAvailableAssets] = useState<AssetRow[]>([]);
   const employees = MockDB.getEmployees();
+  const selectedAsset =
+    availableAssets.find((a) => a.id === form.asset_id) ??
+    (form.asset_id ? MockDB.getAssets().find((a) => a.id === form.asset_id) ?? null : null);
 
   useEffect(() => {
     if (open) {
@@ -78,13 +81,29 @@ export function AssignDialog({
         <form onSubmit={submit} className="space-y-4 pt-4">
           <Field label="Asset" required>
             <Select value={form.asset_id} onValueChange={(v) => setForm({ ...form, asset_id: v })} disabled={!!preSelectedAssetId}>
-              <SelectTrigger><SelectValue placeholder="Select available asset" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Select available asset">
+                  {selectedAsset ? formatAssetOption(selectedAsset) : undefined}
+                </SelectValue>
+              </SelectTrigger>
               <SelectContent>
                 {availableAssets.map(a => (
-                  <SelectItem key={a.id} value={a.id}>{a.asset_name} ({a.asset_code})</SelectItem>
+                  <SelectItem key={a.id} value={a.id}>{formatAssetOption(a)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {selectedAsset && (
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground font-normal">Serial Number</Label>
+                <Input
+                  readOnly
+                  tabIndex={-1}
+                  aria-label="Asset serial number"
+                  value={selectedAsset.serial_number?.trim() ? selectedAsset.serial_number : "—"}
+                  className="bg-muted font-mono text-sm"
+                />
+              </div>
+            )}
           </Field>
           
           <Field label="Assigned to" required>
@@ -129,4 +148,10 @@ function Field({ label, required, children }: { label: string; required?: boolea
       {children}
     </div>
   );
+}
+
+function formatAssetOption(asset: AssetRow): string {
+  const base = `${asset.asset_name} (${asset.asset_code})`;
+  const serial = asset.serial_number?.trim();
+  return serial ? `${base} – SN: ${serial}` : base;
 }

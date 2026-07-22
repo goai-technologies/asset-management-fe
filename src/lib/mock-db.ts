@@ -2,6 +2,7 @@ import { getAssetImageStorage } from "@/lib/asset-images";
 import {
   initAssetDbFromSupabase as bootstrapAssetDbFromSupabase,
   scheduleAssetDbPersist,
+  flushAssetDbPersist,
 } from "@/lib/db/supabase-persistence";
 import { NotificationEvents } from "@/lib/notifications";
 
@@ -235,6 +236,10 @@ const DEFAULT_DB: DBSchema = {
 };
 
 function getDb(): DBSchema {
+  if (typeof window === "undefined") {
+    return DEFAULT_DB;
+  }
+
   const data = localStorage.getItem(DB_KEY);
   if (!data) {
     localStorage.setItem(DB_KEY, JSON.stringify(DEFAULT_DB));
@@ -287,6 +292,8 @@ function getDb(): DBSchema {
 }
 
 function saveDb(db: DBSchema) {
+  if (typeof window === "undefined") return;
+
   localStorage.setItem(DB_KEY, JSON.stringify(db));
   scheduleAssetDbPersist(db);
   if (typeof window !== "undefined") {
@@ -296,15 +303,19 @@ function saveDb(db: DBSchema) {
 
 /** Hydrate in-memory cache from Supabase (or migrate local data on first run). */
 export function initAssetDbFromSupabase(): Promise<unknown> {
-  return bootstrapAssetDbFromSupabase(
-    () => getDb(),
-    (snapshot) => {
-      localStorage.setItem(DB_KEY, JSON.stringify(snapshot));
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("eams:mock-db-changed"));
-      }
-    },
-  );
+  if (typeof window === "undefined") return Promise.resolve(null);
+
+  return flushAssetDbPersist()
+    .catch(() => undefined)
+    .then(() =>
+      bootstrapAssetDbFromSupabase(
+        () => getDb(),
+        (snapshot) => {
+          localStorage.setItem(DB_KEY, JSON.stringify(snapshot));
+          window.dispatchEvent(new CustomEvent("eams:mock-db-changed"));
+        },
+      ),
+    );
 }
 
 // Generate unique ID

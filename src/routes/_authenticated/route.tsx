@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, redirect, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import {
   LayoutDashboard, Boxes, LogOut, Menu, User as UserIcon, Settings, Users, Store, FolderTree,
@@ -26,7 +26,6 @@ export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async () => {
     const { data } = await supabase.auth.getSession();
     if (!data.session) throw redirect({ to: "/auth" });
-    await initAssetDbFromSupabase();
     return { user: data.session.user };
   },
   component: AuthedLayout,
@@ -44,6 +43,12 @@ function AuthedLayout() {
   const { user } = useSession();
   const { roles, isAdmin, isIt, loading: rolesLoading } = useRoles(user?.id);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    void initAssetDbFromSupabase().catch((error) => {
+      console.error("[AssetDB] Failed to initialize:", error);
+    });
+  }, []);
 
   const roleLabel = isAdmin ? "Administrator" : isIt ? "IT Team" : "Employee";
   const items = NAV.filter((n) => roles.some((r) => (n.roles as readonly string[]).includes(r))
