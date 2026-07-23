@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { PasswordInput } from "@/components/password-input";
-import { supabase } from "@/integrations/supabase/client";
+import { requestPasswordReset, resetPassword } from "@/lib/api/auth";
 import { toast } from "sonner";
 
 type ForgotPasswordStep = "email" | "otp" | "password";
@@ -46,13 +46,14 @@ export function ForgotPasswordDialog({
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: window.location.origin,
-    });
+    const { error, devToken } = await requestPasswordReset(email.trim());
     setLoading(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(error);
       return;
+    }
+    if (devToken) {
+      toast.message(`Dev reset code: ${devToken}`, { duration: 10000 });
     }
     toast.success("Verification code sent to your email.");
     setStep("otp");
@@ -62,18 +63,6 @@ export function ForgotPasswordDialog({
     e.preventDefault();
     if (otp.length !== 6) {
       toast.error("Please enter the 6-digit verification code.");
-      return;
-    }
-
-    setLoading(true);
-    const { error } = await supabase.auth.verifyOtp({
-      email: email.trim(),
-      token: otp,
-      type: "recovery",
-    });
-    setLoading(false);
-    if (error) {
-      toast.error(error.message);
       return;
     }
     toast.success("Email verified. Set your new password.");
@@ -92,11 +81,10 @@ export function ForgotPasswordDialog({
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    await supabase.auth.signOut();
+    const { error } = await resetPassword(email.trim(), otp, newPassword);
     setLoading(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(error);
       return;
     }
 
@@ -106,13 +94,14 @@ export function ForgotPasswordDialog({
 
   const handleResendOtp = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: window.location.origin,
-    });
+    const { error, devToken } = await requestPasswordReset(email.trim());
     setLoading(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(error);
       return;
+    }
+    if (devToken) {
+      toast.message(`Dev reset code: ${devToken}`, { duration: 10000 });
     }
     toast.success("A new verification code has been sent.");
   };

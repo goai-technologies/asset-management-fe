@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useSession, useRoles, type AppRole } from "@/hooks/use-auth";
+import { getAdminUsers, setUserRole } from "@/lib/api/auth";
+import type { AppRole } from "@/lib/api/auth-types";
+import { useSession, useRoles } from "@/hooks/use-auth";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -25,24 +26,12 @@ function SettingsPage() {
   const { data: users = [] } = useQuery({
     queryKey: ["all-users"],
     enabled: isAdmin,
-    queryFn: async () => {
-      const [profiles, roles] = await Promise.all([
-        supabase.from("profiles").select("id, name, email"),
-        supabase.from("user_roles").select("user_id, role"),
-      ]);
-      const roleByUser = new Map<string, AppRole>();
-      for (const r of roles.data ?? []) roleByUser.set(r.user_id, r.role as AppRole);
-      return (profiles.data ?? []).map<UserRow>((p) => ({
-        id: p.id, name: p.name, email: p.email, role: roleByUser.get(p.id) ?? "employee",
-      }));
-    },
+    queryFn: async () => getAdminUsers(),
   });
 
   const setRole = async (userId: string, newRole: AppRole) => {
-    const a = await supabase.from("user_roles").delete().eq("user_id", userId);
-    if (a.error) return toast.error(a.error.message);
-    const b = await supabase.from("user_roles").insert({ user_id: userId, role: newRole });
-    if (b.error) return toast.error(b.error.message);
+    const { error } = await setUserRole(userId, newRole);
+    if (error) return toast.error(error);
     toast.success("Role updated");
     qc.invalidateQueries({ queryKey: ["all-users"] });
   };

@@ -1,58 +1,52 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { MockDB } from "@/lib/mock-db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { PageHeader } from "@/components/page-header";
 import { currency, shortDate, warrantyState } from "@/lib/format";
 import { AssetOwnerDisplay } from "@/components/asset-owner-display";
+import { useMockDbRefresh } from "@/hooks/use-mock-db-refresh";
 
 export const Route = createFileRoute("/_authenticated/assets/$id")({
   component: AssetDetail,
 });
 
 function AssetDetail() {
+  useMockDbRefresh();
   const { id } = useParams({ from: "/_authenticated/assets/$id" });
 
-  const { data: asset, isLoading } = useQuery({
-    queryKey: ["asset", id],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("assets")
-        .select("*, categories(category_name), vendors(vendor_name), employees:assigned_employee_id(name, employee_code)")
-        .eq("id", id).maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-  });
+  const asset = MockDB.getAssets().find((a) => a.id === id);
+  const categories = new Map(MockDB.getCategories().map((c) => [c.id, c.category_name]));
+  const vendors = new Map(MockDB.getVendors().map((v) => [v.id, v.vendor_name]));
+  const employees = new Map(MockDB.getEmployees().map((e) => [e.id, e]));
 
-  const { data: assignments = [] } = useQuery({
-    queryKey: ["asset-assignments", id],
-    queryFn: async () =>
-      (await supabase.from("assignments").select("*, employees(name, employee_code)")
-        .eq("asset_id", id).order("assigned_date", { ascending: false })).data ?? [],
-  });
+  const assignments = MockDB.getAssetAssignments(id).map((a) => ({
+    ...a,
+    employee: employees.get(a.employee_id),
+  }));
 
-  const { data: repairs = [] } = useQuery({
-    queryKey: ["asset-repairs", id],
-    queryFn: async () =>
-      (await supabase.from("repairs").select("*, vendors(vendor_name)")
-        .eq("asset_id", id).order("repair_date", { ascending: false })).data ?? [],
-  });
+  const repairs = MockDB.getAssetRepairs(id);
 
-  if (isLoading) return <p className="text-muted-foreground">Loading…</p>;
   if (!asset) return <p className="text-muted-foreground">Asset not found.</p>;
 
-  const cat = (asset.categories as { category_name?: string } | null)?.category_name;
-  const vendor = (asset.vendors as { vendor_name?: string } | null)?.vendor_name;
-  const employee = asset.employees as { name?: string; employee_code?: string } | null;
+  const cat = asset.category_id ? categories.get(asset.category_id) : undefined;
+  const vendor = asset.vendor_id ? vendors.get(asset.vendor_id) : undefined;
+  const employee = asset.assigned_employee_id
+    ? employees.get(asset.assigned_employee_id)
+    : null;
   const wState = warrantyState(asset.warranty_expiry);
 
   return (
     <div>
       <div className="mb-4">
-        <Button asChild variant="ghost" size="sm"><Link to="/assets"><ArrowLeft className="h-4 w-4 mr-1" />Back to assets</Link></Button>
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/assets">
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            Back to assets
+          </Link>
+        </Button>
       </div>
       <PageHeader
         title={asset.asset_name}
@@ -69,7 +63,14 @@ function AssetDetail() {
             <Row label="Category" value={cat} />
             <Row label="Serial Number" value={asset.serial_number} mono />
             <Row label="Location" value={asset.location} />
-            <Row label="Assigned to" value={employee?.name ? `${employee.name} (${employee.employee_code})` : <AssetOwnerDisplay />} />
+            <Row
+              label="Assigned to"
+              value={
+                employee?.name
+                  ? `${employee.name} (${employee.employee_code})`
+                  : <AssetOwnerDisplay />
+              }
+            />
             {asset.remarks && <Row label="Remarks" value={asset.remarks} />}
           </CardContent>
         </Card>
@@ -80,7 +81,6 @@ function AssetDetail() {
             <Row label="Vendor" value={vendor} />
             <Row label="Purchase Date" value={shortDate(asset.purchase_date)} />
             <Row label="Purchase Cost" value={currency(asset.purchase_cost)} />
-            <Row label="Warranty Start" value={shortDate(asset.warranty_start)} />
             <Row label="Warranty Expiry" value={shortDate(asset.warranty_expiry)} />
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Warranty Status</span>
@@ -97,21 +97,21 @@ function AssetDetail() {
             <p className="text-sm text-muted-foreground">No assignments yet.</p>
           ) : (
             <ul className="divide-y">
-              {assignments.map((a) => {
-                const emp = a.employees as { name?: string; employee_code?: string } | null;
-                return (
-                  <li key={a.id} className="py-3 flex items-center justify-between">
-                    <div>
-                      <div className="font-medium">{emp?.name} <span className="text-xs text-muted-foreground">({emp?.employee_code})</span></div>
-                      <div className="text-xs text-muted-foreground">
-                        Assigned {shortDate(a.assigned_date)}
-                        {a.returned_date && <> · Returned {shortDate(a.returned_date)}</>}
-                      </div>
+              {assignments.map((a) => (
+                <li key={a.id} className="py-3 flex items-center justify-between">
+                  <div>
+                    <div className="font-medium">
+                      {a.employee?.name}{" "}
+                      <span className="text-xs text-muted-foreground">({a.employee?.employee_code})</span>
                     </div>
-                    <StatusBadge status={a.status} kind="assignment" />
-                  </li>
-                );
-              })}
+                    <div className="text-xs text-muted-foreground">
+                      Assigned {shortDate(a.assigned_date)}
+                      {a.returned_date && <> · Returned {shortDate(a.returned_date)}</>}
+                    </div>
+                  </div>
+                  <StatusBadge status={a.status} kind="assignment" />
+                </li>
+              ))}
             </ul>
           )}
         </CardContent>
@@ -124,20 +124,19 @@ function AssetDetail() {
             <p className="text-sm text-muted-foreground">No repairs on record.</p>
           ) : (
             <ul className="divide-y">
-              {repairs.map((r) => {
-                const v = r.vendors as { vendor_name?: string } | null;
-                return (
-                  <li key={r.id} className="py-3 flex items-center justify-between gap-4">
-                    <div>
-                      <div className="font-medium">{r.issue}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {shortDate(r.repair_date)}{v?.vendor_name && <> · {v.vendor_name}</>}{r.repair_cost != null && <> · {currency(r.repair_cost)}</>}
-                      </div>
+              {repairs.map((r) => (
+                <li key={r.id} className="py-3 flex items-center justify-between gap-4">
+                  <div>
+                    <div className="font-medium">{r.unassign_reason ?? r.repair_notes ?? "Repair"}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {shortDate(r.created_at)}
+                      {r.vendor_id && vendors.get(r.vendor_id) && <> · {vendors.get(r.vendor_id)}</>}
+                      {r.repair_cost != null && <> · {currency(r.repair_cost)}</>}
                     </div>
-                    <StatusBadge status={r.status} kind="repair" />
-                  </li>
-                );
-              })}
+                  </div>
+                  <StatusBadge status={r.status} kind="repair" />
+                </li>
+              ))}
             </ul>
           )}
         </CardContent>

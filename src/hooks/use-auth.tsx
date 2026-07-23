@@ -1,25 +1,35 @@
 import { useEffect, useState } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { getRoles, getSession, onAuthChanged } from "@/lib/api/auth";
+import type { AppRole, AuthSession, AuthUser } from "@/lib/api/auth-types";
 
-export type AppRole = "administrator" | "it_team" | "employee";
+export type { AppRole, AuthUser };
 
 export function useSession() {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
+
+    const load = async () => {
+      const next = await getSession();
       if (!mounted) return;
-      setSession(data.session);
+      setSession(next);
       setLoading(false);
+    };
+
+    void load();
+    const unsubscribe = onAuthChanged(() => {
+      void load();
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    return () => { mounted = false; sub.subscription.unsubscribe(); };
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
   }, []);
 
-  return { session, user: session?.user ?? null as User | null, loading };
+  return { session, user: session?.user ?? null, loading };
 }
 
 export function useRoles(userId: string | null | undefined) {
@@ -27,20 +37,36 @@ export function useRoles(userId: string | null | undefined) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!userId) { setRoles([]); setLoading(false); return; }
+    if (!userId) {
+      setRoles([]);
+      setLoading(false);
+      return;
+    }
+
     let mounted = true;
     setLoading(true);
-    supabase.from("user_roles").select("role").eq("user_id", userId).then(({ data }) => {
+
+    getRoles(userId).then((loaded) => {
       if (!mounted) return;
-      let loaded = (data ?? []).map((r) => r.role as AppRole);
-      // Local dev fallback when no Supabase role is assigned yet
       if (loaded.length === 0 && import.meta.env.DEV) {
-        loaded = ["administrator"];
+        setRoles(["administrator"]);
+      } else {
+        setRoles(loaded);
       }
-      setRoles(loaded);
       setLoading(false);
     });
-    return () => { mounted = false; };
+
+    const unsubscribe = onAuthChanged(() => {
+      void getRoles(userId).then((loaded) => {
+        if (!mounted) return;
+        setRoles(loaded.length === 0 && import.meta.env.DEV ? ["administrator"] : loaded);
+      });
+    });
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
   }, [userId]);
 
   const isAdmin = roles.includes("administrator");

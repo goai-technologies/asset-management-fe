@@ -1,9 +1,10 @@
 import { getAssetImageStorage } from "@/lib/asset-images";
+import { generateCategoryAssetCode } from "@/lib/asset-code";
 import {
-  initAssetDbFromSupabase as bootstrapAssetDbFromSupabase,
+  initAssetDbFromApi as bootstrapAssetDbFromApi,
   scheduleAssetDbPersist,
   flushAssetDbPersist,
-} from "@/lib/db/supabase-persistence";
+} from "@/lib/db/api-persistence";
 import { NotificationEvents } from "@/lib/notifications";
 
 export type Category = {
@@ -301,14 +302,14 @@ function saveDb(db: DBSchema) {
   }
 }
 
-/** Hydrate in-memory cache from Supabase (or migrate local data on first run). */
-export function initAssetDbFromSupabase(): Promise<unknown> {
+/** Hydrate in-memory cache from PostgreSQL API (or migrate local data on first run). */
+export function initAssetDbFromApi(): Promise<unknown> {
   if (typeof window === "undefined") return Promise.resolve(null);
 
   return flushAssetDbPersist()
     .catch(() => undefined)
     .then(() =>
-      bootstrapAssetDbFromSupabase(
+      bootstrapAssetDbFromApi(
         () => getDb(),
         (snapshot) => {
           localStorage.setItem(DB_KEY, JSON.stringify(snapshot));
@@ -318,9 +319,11 @@ export function initAssetDbFromSupabase(): Promise<unknown> {
     );
 }
 
+/** @deprecated Use initAssetDbFromApi */
+export const initAssetDbFromSupabase = initAssetDbFromApi;
+
 // Generate unique ID
 export const genId = () => Math.random().toString(36).substring(2, 9);
-export const genAssetCode = (cat: string) => `${cat.substring(0,2).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
 export const genEmployeeCode = () => `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
 export const genVendorCode = () => `VND-${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -609,11 +612,16 @@ export const MockDB = {
 
   addAsset: (asset: Omit<Asset, "id" | "created_at" | "asset_code">) => {
     const db = getDb();
-    const cat = db.categories.find(c => c.id === asset.category_id)?.category_name || "AS";
+    const category = db.categories.find((c) => c.id === asset.category_id);
+    const categoryName = category?.category_name ?? "Asset";
     const newAsset: Asset = {
       ...asset,
       id: genId(),
-      asset_code: genAssetCode(cat),
+      asset_code: generateCategoryAssetCode(
+        asset.category_id,
+        categoryName,
+        db.assets,
+      ),
       created_at: new Date().toISOString(),
       isDeleted: false,
       deleted_at: null,
@@ -628,7 +636,8 @@ export const MockDB = {
     const db = getDb();
     const idx = db.assets.findIndex(a => a.id === id);
     if (idx !== -1) {
-      db.assets[idx] = { ...db.assets[idx], ...updates };
+      const { asset_code: _preserveAssetCode, ...safeUpdates } = updates;
+      db.assets[idx] = { ...db.assets[idx], ...safeUpdates };
       saveDb(db);
       const updated = db.assets[idx];
       NotificationEvents.assetUpdated({ id: updated.id, asset_name: updated.asset_name });

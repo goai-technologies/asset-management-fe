@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { User } from "@supabase/supabase-js";
+import type { AuthUser } from "@/lib/api/auth-types";
 import { MockDB } from "@/lib/mock-db";
 import {
   UserAccountStore,
@@ -25,7 +25,7 @@ function findEmployeeByEmail(email?: string | null) {
   return MockDB.getEmployees().find((e) => e.email.trim().toLowerCase() === needle) ?? null;
 }
 
-function buildDefaults(user: User | null, roleLabel: string): ResolvedUserProfile {
+function buildDefaults(user: AuthUser | null, roleLabel: string): ResolvedUserProfile {
   const email = user?.email ?? "";
   const employee = findEmployeeByEmail(email);
   const metaName = typeof user?.user_metadata?.name === "string" ? user.user_metadata.name : "";
@@ -43,7 +43,7 @@ function buildDefaults(user: User | null, roleLabel: string): ResolvedUserProfil
   };
 }
 
-export function useUserProfile(user: User | null, roleLabel: string) {
+export function useUserProfile(user: AuthUser | null, roleLabel: string) {
   const [version, setVersion] = useState(0);
 
   useEffect(() => {

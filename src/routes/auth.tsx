@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Boxes } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { getSession, signIn, signUp } from "@/lib/api/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,17 +28,20 @@ function AuthPage() {
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/dashboard" });
+    void getSession().then((session) => {
+      if (session) navigate({ to: "/dashboard" });
     });
   }, [navigate]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: signInEmail, password: signInPass });
+    const { error } = await signIn(signInEmail, signInPass);
     setLoading(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error);
+      return;
+    }
     NotificationEvents.loginSuccessful(signInEmail);
     toast.success("Welcome back");
     navigate({ to: "/dashboard" });
@@ -47,16 +50,12 @@ function AuthPage() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email: signUpEmail,
-      password: signUpPass,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: { name: signUpName },
-      },
-    });
+    const { error } = await signUp(signUpEmail, signUpPass, signUpName);
     setLoading(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error);
+      return;
+    }
     toast.success("Account created — you can sign in now");
   };
 

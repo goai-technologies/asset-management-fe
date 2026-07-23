@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { supabase } from "@/integrations/supabase/client";
+import { updatePassword } from "@/lib/api/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/account-settings")({
@@ -43,7 +43,7 @@ function AccountSettingsPage() {
     if (newPassword.length < 6) { toast.error("Password must be at least 6 characters."); return; }
     if (newPassword !== confirmPassword) { toast.error("Passwords do not match."); return; }
     setChangingPassword(true);
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    const { error } = await updatePassword(newPassword);
     setChangingPassword(false);
     if (error) { toast.error(error.message); return; }
     toast.success("Password updated successfully");

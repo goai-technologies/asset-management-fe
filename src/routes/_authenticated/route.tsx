@@ -1,12 +1,12 @@
 import { createFileRoute, Outlet, redirect, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import type { User } from "@supabase/supabase-js";
+import type { AuthUser } from "@/lib/api/auth-types";
 import {
   LayoutDashboard, Boxes, LogOut, Menu, User as UserIcon, Settings, Users, Store, FolderTree,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { initAssetDbFromSupabase } from "@/lib/mock-db";
+import { getSession, signOut } from "@/lib/api/auth";
+import { initAssetDbFromApi } from "@/lib/mock-db";
 import { useSession, useRoles } from "@/hooks/use-auth";
 import { useUserProfile } from "@/hooks/use-user-account";
 import { Button } from "@/components/ui/button";
@@ -24,9 +24,9 @@ import { NavThemeToggle } from "@/components/theme-selector";
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) throw redirect({ to: "/auth" });
-    return { user: data.session.user };
+    const session = await getSession();
+    if (!session) throw redirect({ to: "/auth" });
+    return { user: session.user };
   },
   component: AuthedLayout,
 });
@@ -45,7 +45,7 @@ function AuthedLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    void initAssetDbFromSupabase().catch((error) => {
+    void initAssetDbFromApi().catch((error) => {
       console.error("[AssetDB] Failed to initialize:", error);
     });
   }, []);
@@ -120,16 +120,16 @@ function SidebarInner({
   );
 }
 
-function TopBar({ onMenu, user, roleLabel }: { onMenu: () => void; user: User | null; roleLabel: string }) {
+function TopBar({ onMenu, user, roleLabel }: { onMenu: () => void; user: AuthUser | null; roleLabel: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { profile } = useUserProfile(user, roleLabel);
 
-  const signOut = async () => {
+  const handleSignOut = async () => {
     await queryClient.cancelQueries();
     queryClient.clear();
-    await supabase.auth.signOut();
+    await signOut();
     navigate({ to: "/auth", replace: true });
   };
 
@@ -177,7 +177,7 @@ function TopBar({ onMenu, user, roleLabel }: { onMenu: () => void; user: User | 
               <Link to="/account-settings"><Settings className="h-4 w-4 mr-2" />Settings</Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
+            <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
               <LogOut className="h-4 w-4 mr-2" />Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
