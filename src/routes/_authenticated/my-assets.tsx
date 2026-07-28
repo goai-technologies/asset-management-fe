@@ -1,15 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Boxes } from "lucide-react";
 import { useSession } from "@/hooks/use-auth";
-import { useMockDbRefresh } from "@/hooks/use-mock-db-refresh";
-import { getMyAssignedAssets } from "@/hooks/use-user-account";
+import { useMyAssignedAssets } from "@/hooks/use-user-account";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { StatusBadge } from "@/components/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MockDB } from "@/lib/mock-db";
 import { shortDate } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/my-assets")({
@@ -18,22 +16,16 @@ export const Route = createFileRoute("/_authenticated/my-assets")({
 
 function MyAssetsPage() {
   const { user } = useSession();
-  const { tick: refreshTick } = useMockDbRefresh();
-  const [assets, setAssets] = useState<ReturnType<typeof MockDB.getEmployeeAssignedAssets>>([]);
-
-  useEffect(() => {
-    setAssets(getMyAssignedAssets(user?.email).assets);
-  }, [user?.email, refreshTick]);
+  const { assets, assignments } = useMyAssignedAssets(user?.email);
 
   const rows = useMemo(
     () => assets.map((asset) => {
-      const employee = getMyAssignedAssets(user?.email).employee;
-      const assignment = employee
-        ? MockDB.getEmployeeAssignments(employee.id).find((a) => a.asset_id === asset.id && a.status === "assigned")
-        : null;
+      const assignment = assignments.find(
+        (a) => a.asset_id === asset.id && a.status === "assigned",
+      ) ?? null;
       return { asset, assignment };
     }),
-    [assets, user?.email],
+    [assets, assignments],
   );
 
   return (

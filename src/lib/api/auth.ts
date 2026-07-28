@@ -1,24 +1,33 @@
-import { getStoredToken, setStoredSession } from "./client";
+import { apiGet, apiPost, apiPut } from "./axios";
 import type { AppRole, AuthSession } from "./auth-types";
-import {
-  getAdminUsersFn,
-  getRolesFn,
-  getSessionFn,
-  loginFn,
-  requestPasswordResetFn,
-  resetPasswordFn,
-  setUserRoleFn,
-  signupFn,
-  updatePasswordFn,
-} from "@/functions/auth";
+import { getStoredToken, setStoredSession } from "./client";
 
 const AUTH_CHANGED = "eams:auth-changed";
 
-function authOpts() {
-  const token = getStoredToken();
-  return token
-    ? { headers: { Authorization: `Bearer ${token}` } as HeadersInit }
-    : {};
+type LoginResult = {
+  accessToken: string;
+  user: { id: string; email: string; name: string; roles: string[] };
+};
+
+type Profile = LoginResult["user"];
+
+function toAppRole(role: string): AppRole | null {
+  const normalized = role.trim().toLowerCase();
+  if (normalized === "administrator" || normalized === "admin") return "administrator";
+  if (normalized === "it_team" || normalized === "it team") return "it_team";
+  if (normalized === "employee") return "employee";
+  return null;
+}
+
+function toSession(token: string, profile: Profile): AuthSession {
+  return {
+    access_token: token,
+    user: {
+      id: profile.id,
+      email: profile.email,
+      user_metadata: { name: profile.name },
+    },
+  };
 }
 
 export function notifyAuthChanged() {
@@ -37,27 +46,27 @@ export async function getSession(): Promise<AuthSession | null> {
   const token = getStoredToken();
   if (!token) return null;
 
-  const result = await getSessionFn({
-    ...authOpts(),
-  });
-
-  if (!result.session) {
+  try {
+    const profile = await apiGet<Profile>("/auth/profile");
+    const session = toSession(token, profile);
+    setStoredSession(session);
+    return session;
+  } catch {
     setStoredSession(null);
     return null;
   }
-
-  setStoredSession(result.session);
-  return result.session;
 }
 
 export async function signIn(email: string, password: string): Promise<{ error?: string }> {
-  const result = await loginFn({ data: { email, password } });
-  if ("error" in result && result.error) return { error: result.error };
-  if (!result.session) return { error: "Sign in failed" };
-
-  setStoredSession(result.session);
-  notifyAuthChanged();
-  return {};
+  try {
+    const result = await apiPost<LoginResult>("/auth/login", { email, password });
+    const session = toSession(result.accessToken, result.user);
+    setStoredSession(session);
+    notifyAuthChanged();
+    return {};
+  } catch (error: unknown) {
+    return { error: error instanceof Error ? error.message : "Sign in failed" };
+  }
 }
 
 export async function signUp(
@@ -65,36 +74,45 @@ export async function signUp(
   password: string,
   name: string,
 ): Promise<{ error?: string }> {
-  const result = await signupFn({ data: { email, password, name } });
-  if ("error" in result && result.error) return { error: result.error };
-  if (!result.session) return { error: "Sign up failed" };
-
-  setStoredSession(result.session);
-  notifyAuthChanged();
-  return {};
+  try {
+    const result = await apiPost<LoginResult>("/auth/register", { email, password, name });
+    const session = toSession(result.accessToken, result.user);
+    setStoredSession(session);
+    notifyAuthChanged();
+    return {};
+  } catch (error: unknown) {
+    return { error: error instanceof Error ? error.message : "Sign up failed" };
+  }
 }
 
 export async function signOut(): Promise<void> {
+  try {
+    await apiPost("/auth/logout");
+  } catch {
+    // Clear local session even if logout request fails.
+  }
   setStoredSession(null);
   notifyAuthChanged();
 }
 
 export async function updatePassword(password: string): Promise<{ error?: string }> {
-  const token = getStoredToken();
-  const result = await updatePasswordFn({
-    data: { password, token: token ?? undefined },
-    ...authOpts(),
-  });
-  if ("error" in result && result.error) return { error: result.error };
-  return {};
+  try {
+    await apiPut("/auth/change-password", { password });
+    return {};
+  } catch (error: unknown) {
+    return { error: error instanceof Error ? error.message : "Password update failed" };
+  }
 }
 
 export async function requestPasswordReset(
   email: string,
 ): Promise<{ error?: string; devToken?: string }> {
-  const result = await requestPasswordResetFn({ data: { email } });
-  if ("error" in result && result.error) return { error: result.error };
-  return { devToken: result.devToken };
+  try {
+    const result = await apiPost<{ devToken?: string }>("/auth/forgot-password", { email });
+    return { devToken: result.devToken };
+  } catch (error: unknown) {
+    return { error: error instanceof Error ? error.message : "Password reset request failed" };
+  }
 }
 
 export async function resetPassword(
@@ -102,18 +120,27 @@ export async function resetPassword(
   token: string,
   password: string,
 ): Promise<{ error?: string }> {
-  const result = await resetPasswordFn({ data: { email, token, password } });
-  if ("error" in result && result.error) return { error: result.error };
-  return {};
+  try {
+    await apiPost("/auth/reset-password", { email, token, password });
+    return {};
+  } catch (error: unknown) {
+    return { error: error instanceof Error ? error.message : "Password reset failed" };
+  }
 }
 
 export async function getRoles(_userId: string): Promise<AppRole[]> {
   const token = getStoredToken();
-  const result = await getRolesFn({
-    data: { token: token ?? undefined },
-    ...authOpts(),
-  });
-  return result.roles ?? [];
+  if (!token) return [];
+
+  try {
+    const profile = await apiGet<Profile>("/auth/profile");
+    const roles = profile.roles
+      .map(toAppRole)
+      .filter((role): role is AppRole => role !== null);
+    return roles;
+  } catch {
+    return [];
+  }
 }
 
 export type AdminUser = {
@@ -124,21 +151,21 @@ export type AdminUser = {
 };
 
 export async function getAdminUsers(): Promise<AdminUser[]> {
-  const token = getStoredToken();
-  const result = await getAdminUsersFn({
-    data: { token: token ?? undefined },
-    ...authOpts(),
-  });
-  if ("error" in result && result.error) return [];
-  return result.users ?? [];
+  const session = await getSession();
+  if (!session) return [];
+
+  const roles = await getRoles(session.user.id);
+  const role = roles[0] ?? "employee";
+  return [
+    {
+      id: session.user.id,
+      name: session.user.user_metadata?.name ?? session.user.email,
+      email: session.user.email,
+      role,
+    },
+  ];
 }
 
-export async function setUserRole(userId: string, role: AppRole): Promise<{ error?: string }> {
-  const token = getStoredToken();
-  const result = await setUserRoleFn({
-    data: { userId, role, token: token ?? undefined },
-    ...authOpts(),
-  });
-  if ("error" in result && result.error) return { error: result.error };
-  return {};
+export async function setUserRole(_userId: string, _role: AppRole): Promise<{ error?: string }> {
+  return { error: "User role management is not available via the REST API yet." };
 }

@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { EmployeeRow } from "@/lib/mock-db";
+import type { EmployeeRow } from "@/lib/types/asset-management";
 
 export type EmployeeDetailsTab = "general" | "assets" | "history" | "repairs";
 

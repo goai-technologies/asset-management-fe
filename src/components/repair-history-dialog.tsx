@@ -14,7 +14,13 @@ import { EmptyState } from "@/components/empty-state";
 import { StatusBadge } from "@/components/status-badge";
 import { Wrench } from "lucide-react";
 import { toast } from "sonner";
-import { MockDB, type AssetRow, type RepairRow } from "@/lib/mock-db";
+import {
+  useAssetRepairs,
+  useCompleteRepairMutation,
+  useUpdateRepairMutation,
+  useVendors,
+} from "@/hooks/use-asset-management";
+import type { AssetRow, RepairRow } from "@/lib/types/asset-management";
 import { currencyINR, dateTime, shortDate } from "@/lib/format";
 
 export function RepairHistoryDialog({
@@ -30,7 +36,6 @@ export function RepairHistoryDialog({
   canManage: boolean;
   onUpdated: () => void;
 }) {
-  const [repairs, setRepairs] = useState<RepairRow[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     vendor_id: "",
@@ -41,11 +46,13 @@ export function RepairHistoryDialog({
   });
   const [saving, setSaving] = useState(false);
 
-  const vendors = MockDB.getVendors();
+  const { data: vendors = [] } = useVendors();
+  const { data: repairs = [], refetch: refetchRepairs } = useAssetRepairs(open ? asset?.id : undefined);
+  const updateMutation = useUpdateRepairMutation();
+  const completeMutation = useCompleteRepairMutation();
 
   useEffect(() => {
     if (open && asset) {
-      setRepairs(MockDB.getAssetRepairs(asset.id));
       setEditingId(null);
     }
   }, [open, asset]);
@@ -64,14 +71,17 @@ export function RepairHistoryDialog({
   const handleSave = async (repairId: string) => {
     setSaving(true);
     try {
-      MockDB.updateRepair(repairId, {
-        vendor_id: form.vendor_id || null,
-        repair_cost: form.repair_cost ? Number(form.repair_cost) : null,
-        expected_return_date: form.expected_return_date || null,
-        actual_return_date: form.actual_return_date || null,
-        repair_notes: form.repair_notes.trim() || null,
+      await updateMutation.mutateAsync({
+        repairId,
+        updates: {
+          vendor_id: form.vendor_id || null,
+          repair_cost: form.repair_cost ? Number(form.repair_cost) : null,
+          expected_return_date: form.expected_return_date || null,
+          actual_return_date: form.actual_return_date || null,
+          repair_notes: form.repair_notes.trim() || null,
+        },
       });
-      if (asset) setRepairs(MockDB.getAssetRepairs(asset.id));
+      await refetchRepairs();
       setEditingId(null);
       toast.success("Repair details updated");
       onUpdated();
@@ -85,14 +95,17 @@ export function RepairHistoryDialog({
   const handleComplete = async (repairId: string) => {
     setSaving(true);
     try {
-      MockDB.completeRepair(repairId, {
-        vendor_id: form.vendor_id || null,
-        repair_cost: form.repair_cost ? Number(form.repair_cost) : null,
-        expected_return_date: form.expected_return_date || null,
-        actual_return_date: form.actual_return_date || undefined,
-        repair_notes: form.repair_notes.trim() || null,
+      await completeMutation.mutateAsync({
+        repairId,
+        updates: {
+          vendor_id: form.vendor_id || null,
+          repair_cost: form.repair_cost ? Number(form.repair_cost) : null,
+          expected_return_date: form.expected_return_date || null,
+          actual_return_date: form.actual_return_date || undefined,
+          repair_notes: form.repair_notes.trim() || null,
+        },
       });
-      if (asset) setRepairs(MockDB.getAssetRepairs(asset.id));
+      await refetchRepairs();
       setEditingId(null);
       toast.success("Repair marked complete. Asset is now available.");
       onUpdated();

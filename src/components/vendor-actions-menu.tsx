@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { VendorRow } from "@/lib/mock-db";
+import type { VendorRow } from "@/lib/types/asset-management";
 
 export function VendorActionsMenu({
   vendor,

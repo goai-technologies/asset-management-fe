@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { MockDB, type CategoryRow } from "@/lib/mock-db";
+import { useDeleteCategoryMutation } from "@/hooks/use-asset-management";
+import type { CategoryRow } from "@/lib/types/asset-management";
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -33,14 +34,15 @@ export function DeleteCategoryDialog({
   onDeleted: () => void;
 }) {
   const [saving, setSaving] = useState(false);
-  const assetCount = category ? MockDB.getCategoryAssetCount(category.id) : 0;
+  const deleteMutation = useDeleteCategoryMutation();
+  const assetCount = category?.asset_count ?? 0;
   const hasLinkedAssets = assetCount > 0;
 
   const handleConfirm = async () => {
     if (!category || hasLinkedAssets) return;
     setSaving(true);
     try {
-      MockDB.deleteCategory(category.id);
+      await deleteMutation.mutateAsync(category.id);
       toast.success("Category deleted successfully");
       onDeleted();
       onOpenChange(false);

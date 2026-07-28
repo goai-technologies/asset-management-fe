@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useSession } from "@/hooks/use-auth";
+import { useSession, useRoles } from "@/hooks/use-auth";
 import { useUserPreferences } from "@/hooks/use-user-account";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ export const Route = createFileRoute("/_authenticated/account-settings")({
 
 function AccountSettingsPage() {
   const { user } = useSession();
+  const { isAdmin } = useRoles(user?.id);
   const { preferences, savePreferences } = useUserPreferences(user?.id);
   const [draft, setDraft] = useState(preferences);
   const [savingPrefs, setSavingPrefs] = useState(false);
@@ -53,7 +54,15 @@ function AccountSettingsPage() {
 
   return (
     <div>
-      <PageHeader title="Settings" description="Manage your account preferences and security." />
+      <PageHeader title="Account Settings" description="Manage your account preferences and security." />
+      {isAdmin && (
+        <p className="text-sm text-muted-foreground mb-6 -mt-2">
+          Looking for archived assets or user management? Open{" "}
+          <Link to="/assets" className="text-primary hover:underline">Assets → Archived</Link>
+          {" "}or{" "}
+          <Link to="/settings" className="text-primary hover:underline">System Settings</Link>.
+        </p>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl">
         <Card>
           <CardHeader>

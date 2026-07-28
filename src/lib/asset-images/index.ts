@@ -9,12 +9,12 @@ export {
   validateImageBatch,
 } from "./validation";
 export { formatFileSize, readFileAsDataUrl, downloadImage } from "./utils";
-export { localAssetImageStorage } from "./local-storage-adapter";
+export { apiAssetImageStorage, loadAssetImages, primeAssetImages } from "./api-storage-adapter";
 
-import { localAssetImageStorage } from "./local-storage-adapter";
+import { apiAssetImageStorage } from "./api-storage-adapter";
 import type { AssetImageStorageAdapter } from "./types";
 
-let adapter: AssetImageStorageAdapter = localAssetImageStorage;
+let adapter: AssetImageStorageAdapter = apiAssetImageStorage;
 
 /** Swap the storage backend (e.g. S3, Azure Blob, Cloudinary) without changing UI components. */
 export function setAssetImageStorage(next: AssetImageStorageAdapter) {

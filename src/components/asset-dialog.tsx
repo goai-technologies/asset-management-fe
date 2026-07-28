@@ -6,15 +6,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { MockDB, AssetRow } from "@/lib/mock-db";
-import { useMockDbRefresh } from "@/hooks/use-mock-db-refresh";
+import {
+  useCategories,
+  useCreateAssetMutation,
+  useUpdateAssetMutation,
+  useVendors,
+} from "@/hooks/use-asset-management";
+import type { AssetRow } from "@/lib/types/asset-management";
 import { AssetImageUpload } from "@/components/asset-images/asset-image-upload";
 import {
-  getAssetImageStorage,
   type ImageUploadItem,
 } from "@/lib/asset-images";
+import { loadAssetImages } from "@/lib/asset-images/api-storage-adapter";
 
-function toUploadItems(images: ReturnType<ReturnType<typeof getAssetImageStorage>["getImages"]>): ImageUploadItem[] {
+function toUploadItems(images: Awaited<ReturnType<typeof loadAssetImages>>): ImageUploadItem[] {
   return images.map((img) => ({
     id: img.id,
     fileName: img.fileName,
@@ -133,17 +138,19 @@ export function AssetDialog({
   editing: AssetRow | null;
   onSaved: () => void;
 }) {
-  const { tick: refreshTick } = useMockDbRefresh();
-  const vendors = MockDB.getVendors();
-  const storage = getAssetImageStorage();
+  const { data: vendors = [] } = useVendors();
+  const { data: allCategories = [] } = useCategories();
+  const createMutation = useCreateAssetMutation();
+  const updateMutation = useUpdateAssetMutation();
 
   const categories = useMemo(() => {
-    const all = MockDB.getCategories();
-    if (!editing) return MockDB.getActiveCategories();
-    return all.filter(
+    if (!editing) {
+      return allCategories.filter((c) => (c.status ?? "active") === "active");
+    }
+    return allCategories.filter(
       (c) => (c.status ?? "active") === "active" || c.id === editing.category_id,
     );
-  }, [refreshTick, editing?.category_id]);
+  }, [allCategories, editing?.category_id]);
 
   const [form, setForm] = useState<AssetFormState>({
     asset_name: "",
@@ -159,7 +166,6 @@ export function AssetDialog({
     remarks: "",
   });
   const [images, setImages] = useState<ImageUploadItem[]>([]);
-  const [initialImageIds, setInitialImageIds] = useState<string[]>([]);
   const [errors, setErrors] = useState<AssetFormErrors>({});
   const [saving, setSaving] = useState(false);
 
@@ -213,35 +219,14 @@ export function AssetDialog({
       });
 
       if (editing) {
-        const existing = toUploadItems(storage.getImages(editing.id));
-        setImages(existing);
-        setInitialImageIds(existing.map((img) => img.id));
+        void loadAssetImages(editing.id).then((existing) => {
+          setImages(toUploadItems(existing));
+        });
       } else {
         setImages([]);
-        setInitialImageIds([]);
       }
     }
-  }, [open, editing, storage]);
-
-  const syncImages = (assetId: string) => {
-    const removedIds = initialImageIds.filter((id) => !images.some((img) => img.id === id));
-    removedIds.forEach((id) => storage.deleteImage(id));
-
-    const finalIds: string[] = [];
-    for (const img of images) {
-      if (img.isExisting) {
-        finalIds.push(img.id);
-      } else {
-        const [created] = storage.addImages(assetId, [{
-          fileName: img.fileName,
-          fileSize: img.fileSize,
-          imageUrl: img.imageUrl,
-        }]);
-        finalIds.push(created.id);
-      }
-    }
-    if (finalIds.length) storage.reorderImages(assetId, finalIds);
-  };
+  }, [open, editing]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -264,6 +249,7 @@ export function AssetDialog({
       }
     }
 
+    const imageFiles = images.map((image) => image.file).filter((file): file is File => Boolean(file));
     const payload = {
       asset_name: form.asset_name.trim(),
       category_id: form.category_id || null,
@@ -280,25 +266,15 @@ export function AssetDialog({
       location: form.location || null,
       remarks: form.remarks || null,
       assigned_employee_id: editing?.assigned_employee_id || null,
+      _imageFiles: imageFiles,
     };
 
     try {
       if (editing) {
-        MockDB.updateAsset(editing.id, payload);
-        syncImages(editing.id);
+        await updateMutation.mutateAsync({ id: editing.id, updates: payload });
         toast.success("Asset updated successfully");
       } else {
-        const created = MockDB.addAsset(payload);
-        if (images.length) {
-          storage.addImages(
-            created.id,
-            images.map((img) => ({
-              fileName: img.fileName,
-              fileSize: img.fileSize,
-              imageUrl: img.imageUrl,
-            })),
-          );
-        }
+        await createMutation.mutateAsync(payload);
         toast.success("Asset added successfully");
       }
       onSaved();
@@ -379,8 +355,8 @@ export function AssetDialog({
             />
           </Field>
 
-          <Field label="Location" required error={errors.location}>
-            <Input value={form.location} required onChange={(e) => updateForm("location", e.target.value)} />
+          <Field label="Location" required={!editing} error={errors.location}>
+            <Input value={form.location} required={!editing} onChange={(e) => updateForm("location", e.target.value)} />
           </Field>
           <div className="hidden md:block" aria-hidden="true" />
 

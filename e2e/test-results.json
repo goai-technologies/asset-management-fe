@@ -1,0 +1,129 @@
+{
+  "config": {
+    "argv": [
+      "/usr/local/bin/node",
+      "/Users/varsha/Desktop/joy-weaver-app-25/joy-weaver-app-25-1/node_modules/.bin/playwright",
+      "test"
+    ],
+    "configFile": "/Users/varsha/Desktop/joy-weaver-app-25/joy-weaver-app-25-1/playwright.config.ts",
+    "rootDir": "/Users/varsha/Desktop/joy-weaver-app-25/joy-weaver-app-25-1/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/varsha/Desktop/joy-weaver-app-25/joy-weaver-app-25-1/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/varsha/Desktop/joy-weaver-app-25/joy-weaver-app-25-1/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 240000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "e2e/test-results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.61.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "full-application.spec.ts",
+      "file": "full-application.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "full application E2E",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 240000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 21870,
+                  "errors": [],
+                  "stdout": [
+                    {
+                      "text": "\n=== E2E RESULTS ===\n"
+                    },
+                    {
+                      "text": "[\n  {\n    \"name\": \"Backend health endpoint\",\n    \"pass\": true,\n    \"detail\": \"200\"\n  },\n  {\n    \"name\": \"Login page loads\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"User registration\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"Dashboard loads\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"Categories create\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"Categories update\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"Vendors create\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"Vendors update\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"Employees create\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"Employees update\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"Assets create\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"Assets read/list\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"Assets update\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"Assignments assign\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"Assignments unassign\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"Reports page loads\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"Reports CSV export\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"Reports Excel export\",\n    \"pass\": true,\n    \"detail\": \"assets-report-2026-07-24.xlsx\"\n  },\n  {\n    \"name\": \"Reports PDF export\",\n    \"pass\": true,\n    \"detail\": \"assets-report-2026-07-24.pdf\"\n  },\n  {\n    \"name\": \"Categories delete\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"Vendors delete\",\n    \"pass\": true,\n    \"detail\": \"\"\n  },\n  {\n    \"name\": \"Employees delete\",\n    \"pass\": true,\n    \"detail\": \"\"\n  }\n]\n"
+                    },
+                    {
+                      "text": "Console errors: [\n  \u001b[32m'Failed to load resource: net::ERR_BLOCKED_BY_RESPONSE.NotSameOrigin'\u001b[39m\n]\n"
+                    }
+                  ],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-07-24T10:27:56.585Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "429f1f178465229b2217-f728df27f19f86ebe7c1",
+          "file": "full-application.spec.ts",
+          "line": 40,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-07-24T10:27:56.370Z",
+    "duration": 22200.254,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

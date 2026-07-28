@@ -1,40 +1,45 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
-import { MockDB } from "@/lib/mock-db";
+import {
+  useAssetAssignments,
+  useAssetRepairs,
+  useAssets,
+  useCategories,
+  useEmployees,
+  useVendors,
+} from "@/hooks/use-asset-management";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { PageHeader } from "@/components/page-header";
 import { currency, shortDate, warrantyState } from "@/lib/format";
 import { AssetOwnerDisplay } from "@/components/asset-owner-display";
-import { useMockDbRefresh } from "@/hooks/use-mock-db-refresh";
 
 export const Route = createFileRoute("/_authenticated/assets/$id")({
   component: AssetDetail,
 });
 
 function AssetDetail() {
-  useMockDbRefresh();
   const { id } = useParams({ from: "/_authenticated/assets/$id" });
 
-  const asset = MockDB.getAssets().find((a) => a.id === id);
-  const categories = new Map(MockDB.getCategories().map((c) => [c.id, c.category_name]));
-  const vendors = new Map(MockDB.getVendors().map((v) => [v.id, v.vendor_name]));
-  const employees = new Map(MockDB.getEmployees().map((e) => [e.id, e]));
+  const { data: assets = [] } = useAssets();
+  const { data: categories = [] } = useCategories();
+  const { data: vendors = [] } = useVendors();
+  const { data: employees = [] } = useEmployees();
+  const { data: assignments = [] } = useAssetAssignments(id);
+  const { data: repairs = [] } = useAssetRepairs(id);
 
-  const assignments = MockDB.getAssetAssignments(id).map((a) => ({
-    ...a,
-    employee: employees.get(a.employee_id),
-  }));
-
-  const repairs = MockDB.getAssetRepairs(id);
+  const asset = assets.find((a) => a.id === id);
+  const categoryMap = new Map(categories.map((c) => [c.id, c.category_name]));
+  const vendorMap = new Map(vendors.map((v) => [v.id, v.vendor_name]));
+  const employeeMap = new Map(employees.map((e) => [e.id, e]));
 
   if (!asset) return <p className="text-muted-foreground">Asset not found.</p>;
 
-  const cat = asset.category_id ? categories.get(asset.category_id) : undefined;
-  const vendor = asset.vendor_id ? vendors.get(asset.vendor_id) : undefined;
+  const cat = asset.category_id ? categoryMap.get(asset.category_id) : undefined;
+  const vendor = asset.vendor_id ? vendorMap.get(asset.vendor_id) : undefined;
   const employee = asset.assigned_employee_id
-    ? employees.get(asset.assigned_employee_id)
+    ? employeeMap.get(asset.assigned_employee_id)
     : null;
   const wState = warrantyState(asset.warranty_expiry);
 
@@ -97,21 +102,24 @@ function AssetDetail() {
             <p className="text-sm text-muted-foreground">No assignments yet.</p>
           ) : (
             <ul className="divide-y">
-              {assignments.map((a) => (
-                <li key={a.id} className="py-3 flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">
-                      {a.employee?.name}{" "}
-                      <span className="text-xs text-muted-foreground">({a.employee?.employee_code})</span>
+              {assignments.map((a) => {
+                const assignmentEmployee = a.employees ?? employeeMap.get(a.employee_id);
+                return (
+                  <li key={a.id} className="py-3 flex items-center justify-between">
+                    <div>
+                      <div className="font-medium">
+                        {assignmentEmployee?.name}{" "}
+                        <span className="text-xs text-muted-foreground">({assignmentEmployee?.employee_code})</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Assigned {shortDate(a.assigned_date)}
+                        {a.returned_date && <> · Returned {shortDate(a.returned_date)}</>}
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      Assigned {shortDate(a.assigned_date)}
-                      {a.returned_date && <> · Returned {shortDate(a.returned_date)}</>}
-                    </div>
-                  </div>
-                  <StatusBadge status={a.status} kind="assignment" />
-                </li>
-              ))}
+                    <StatusBadge status={a.status} kind="assignment" />
+                  </li>
+                );
+              })}
             </ul>
           )}
         </CardContent>
@@ -130,7 +138,7 @@ function AssetDetail() {
                     <div className="font-medium">{r.unassign_reason ?? r.repair_notes ?? "Repair"}</div>
                     <div className="text-xs text-muted-foreground">
                       {shortDate(r.created_at)}
-                      {r.vendor_id && vendors.get(r.vendor_id) && <> · {vendors.get(r.vendor_id)}</>}
+                      {r.vendor_id && vendorMap.get(r.vendor_id) && <> · {vendorMap.get(r.vendor_id)}</>}
                       {r.repair_cost != null && <> · {currency(r.repair_cost)}</>}
                     </div>
                   </div>

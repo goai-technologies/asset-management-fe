@@ -1,16 +1,16 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, Download, RefreshCw, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   type AssetImage,
-  getAssetImageStorage,
   validateImageFile,
   validateImageBatch,
-  readFileAsDataUrl,
   downloadImage,
   MAX_IMAGES_PER_ASSET,
 } from "@/lib/asset-images";
+import { loadAssetImages } from "@/lib/asset-images/api-storage-adapter";
+import { updateAsset } from "@/lib/api/assets";
 import { EmptyState } from "@/components/empty-state";
 import { AssetImageLightbox } from "./asset-image-lightbox";
 import { AssetImageThumbnail, useImageFileInput, UploadProgressBar } from "./asset-image-thumbnail";
@@ -24,16 +24,25 @@ export function AssetImageGallery({
   canManage?: boolean;
   onChange?: () => void;
 }) {
-  const storage = getAssetImageStorage();
-  const [images, setImages] = useState<AssetImage[]>(() => storage.getImages(assetId));
+  const [images, setImages] = useState<AssetImage[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const replaceTargetRef = useRef<string | null>(null);
 
-  const refresh = useCallback(() => {
-    setImages(storage.getImages(assetId));
+  const refresh = useCallback(async () => {
+    const loaded = await loadAssetImages(assetId);
+    setImages(loaded);
     onChange?.();
-  }, [assetId, onChange, storage]);
+  }, [assetId, onChange]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const uploadToServer = async (files: File[]) => {
+    await updateAsset(assetId, { _imageFiles: files });
+    await refresh();
+  };
 
   const processUpload = async (files: File[], replaceId?: string) => {
     if (replaceId) {
@@ -43,12 +52,10 @@ export function AssetImageGallery({
       if (error) { toast.error(error); return; }
       setUploadProgress(0);
       try {
-        const imageUrl = await readFileAsDataUrl(file, setUploadProgress);
-        storage.replaceImage(replaceId, { fileName: file.name, fileSize: file.size, imageUrl });
-        toast.success("Image replaced");
-        refresh();
+        await uploadToServer([file]);
+        toast.success("Image uploaded");
       } catch {
-        toast.error("Failed to replace image");
+        toast.error("Failed to upload image");
       } finally {
         setUploadProgress(null);
         replaceTargetRef.current = null;
@@ -61,25 +68,13 @@ export function AssetImageGallery({
     if (!valid.length) return;
 
     setUploadProgress(0);
-    const inputs: { fileName: string; fileSize: number; imageUrl: string }[] = [];
-
-    for (let i = 0; i < valid.length; i++) {
-      const file = valid[i];
-      try {
-        const imageUrl = await readFileAsDataUrl(file, (pct) => {
-          setUploadProgress(Math.round(((i + pct / 100) / valid.length) * 100));
-        });
-        inputs.push({ fileName: file.name, fileSize: file.size, imageUrl });
-      } catch {
-        toast.error(`Failed to read "${file.name}"`);
-      }
-    }
-
-    setUploadProgress(null);
-    if (inputs.length) {
-      storage.addImages(assetId, inputs);
-      toast.success(`${inputs.length} image${inputs.length > 1 ? "s" : ""} uploaded`);
-      refresh();
+    try {
+      await uploadToServer(valid);
+      toast.success(`${valid.length} image${valid.length > 1 ? "s" : ""} uploaded`);
+    } catch {
+      toast.error("Failed to upload images");
+    } finally {
+      setUploadProgress(null);
     }
   };
 
@@ -87,10 +82,8 @@ export function AssetImageGallery({
     processUpload(files, replaceTargetRef.current ?? undefined);
   });
 
-  const handleDelete = (image: AssetImage) => {
-    storage.deleteImage(image.id);
-    toast.success("Image deleted");
-    refresh();
+  const handleDelete = (_image: AssetImage) => {
+    toast.error("Image deletion is not supported via the REST API yet.");
   };
 
   const handleDownload = (image: AssetImage) => {

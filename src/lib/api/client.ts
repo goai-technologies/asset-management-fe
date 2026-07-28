@@ -2,6 +2,12 @@ import type { AuthSession } from "./auth-types";
 
 const TOKEN_KEY = "eams_auth_token";
 
+/** Express API base URL (e.g. http://localhost:5001/api). */
+export function getApiBaseUrl(): string {
+  const base = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
+  return base.replace(/\/$/, "");
+}
+
 export function getStoredToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(TOKEN_KEY);

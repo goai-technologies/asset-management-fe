@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { MockDB, type Employee } from "@/lib/mock-db";
+import { useCreateEmployeeMutation, useUpdateEmployeeMutation } from "@/hooks/use-asset-management";
+import type { Employee } from "@/lib/types/asset-management";
 
 type EmployeeFormState = {
   employee_code: string;
@@ -76,6 +77,8 @@ export function EmployeeDialog({
   });
   const [errors, setErrors] = useState<EmployeeFormErrors>({});
   const [saving, setSaving] = useState(false);
+  const createMutation = useCreateEmployeeMutation();
+  const updateMutation = useUpdateEmployeeMutation();
 
   const updateForm = <K extends keyof EmployeeFormState>(key: K, value: EmployeeFormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -143,10 +146,10 @@ export function EmployeeDialog({
       };
 
       if (editing) {
-        MockDB.updateEmployee(editing.id, payload);
+        await updateMutation.mutateAsync({ id: editing.id, updates: payload });
         toast.success("Employee updated successfully");
       } else {
-        MockDB.addEmployee(payload);
+        await createMutation.mutateAsync(payload);
         toast.success("Employee added successfully");
       }
       onSaved();

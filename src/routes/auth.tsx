@@ -36,27 +36,37 @@ function AuthPage() {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await signIn(signInEmail, signInPass);
-    setLoading(false);
-    if (error) {
-      toast.error(error);
-      return;
+    try {
+      const { error } = await signIn(signInEmail, signInPass);
+      if (error) {
+        toast.error(error);
+        return;
+      }
+      NotificationEvents.loginSuccessful(signInEmail);
+      toast.success("Welcome back");
+      navigate({ to: "/dashboard" });
+    } catch {
+      toast.error("Sign in failed. Check that the dev server and database are running.");
+    } finally {
+      setLoading(false);
     }
-    NotificationEvents.loginSuccessful(signInEmail);
-    toast.success("Welcome back");
-    navigate({ to: "/dashboard" });
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await signUp(signUpEmail, signUpPass, signUpName);
-    setLoading(false);
-    if (error) {
-      toast.error(error);
-      return;
+    try {
+      const { error } = await signUp(signUpEmail, signUpPass, signUpName);
+      if (error) {
+        toast.error(error);
+        return;
+      }
+      toast.success("Account created — you can sign in now");
+    } catch {
+      toast.error("Sign up failed. Check that the dev server and database are running.");
+    } finally {
+      setLoading(false);
     }
-    toast.success("Account created — you can sign in now");
   };
 
   return (

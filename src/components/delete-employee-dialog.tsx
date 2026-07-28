@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { MockDB, type EmployeeRow } from "@/lib/mock-db";
+import { useDeleteEmployeeMutation } from "@/hooks/use-asset-management";
+import type { EmployeeRow } from "@/lib/types/asset-management";
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -33,14 +34,15 @@ export function DeleteEmployeeDialog({
   onDeleted: () => void;
 }) {
   const [saving, setSaving] = useState(false);
-  const assignedCount = employee ? MockDB.getEmployeeAssignedAssetCount(employee.id) : 0;
+  const deleteMutation = useDeleteEmployeeMutation();
+  const assignedCount = employee?.assigned_asset_count ?? 0;
   const hasAssignedAssets = assignedCount > 0;
 
   const handleConfirm = async () => {
     if (!employee || hasAssignedAssets) return;
     setSaving(true);
     try {
-      MockDB.deleteEmployee(employee.id);
+      await deleteMutation.mutateAsync(employee.id);
       toast.success("Employee deleted successfully");
       onDeleted();
       onOpenChange(false);

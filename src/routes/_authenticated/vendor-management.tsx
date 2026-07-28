@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Search, Download, Store, MapPin, ExternalLink } from "lucide-react";
 import { useSession, useRoles } from "@/hooks/use-auth";
-import { useMockDbRefresh } from "@/hooks/use-mock-db-refresh";
+import { useVendorRows, useInvalidateAssetData } from "@/hooks/use-asset-management";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import {
   handleClickableRowClick,
   handleClickableRowKeyDown,
 } from "@/lib/clickable-table-row";
-import { MockDB, VENDOR_TYPES, type VendorRow } from "@/lib/mock-db";
+import { VENDOR_TYPES, type VendorRow } from "@/lib/types/asset-management";
 import { VendorDialog } from "@/components/vendor-dialog";
 import { VendorActionsMenu } from "@/components/vendor-actions-menu";
 import { DeleteVendorDialog } from "@/components/delete-vendor-dialog";
@@ -33,25 +33,20 @@ const VENDOR_STATUSES = ["active", "inactive"] as const;
 function VendorManagementPage() {
   const { user } = useSession();
   const { canManage } = useRoles(user?.id);
-  const { tick: refreshTick, refresh: triggerRefresh } = useMockDbRefresh();
-
-  const [q, setQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [typeFilter, setTypeFilter] = useState("all");
-
-  const [vendors, setVendors] = useState<VendorRow[]>([]);
+  const { data: vendors = [], refetch } = useVendorRows();
+  const invalidateAssetData = useInvalidateAssetData();
+  const triggerRefresh = () => {
+    void refetch();
+    invalidateAssetData();
+  };
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<VendorRow | null>(null);
   const [viewVendor, setViewVendor] = useState<VendorRow | null>(null);
   const [deleteVendor, setDeleteVendor] = useState<VendorRow | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
-
-  useEffect(() => {
-    setVendors(MockDB.getVendorRows());
-    if (viewVendor) {
-      setViewVendor(MockDB.getVendorById(viewVendor.id));
-    }
-  }, [refreshTick]);
+  const [q, setQ] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();

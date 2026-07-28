@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { AssetRow } from "@/lib/mock-db";
+import type { AssetRow } from "@/lib/types/asset-management";
 
 export type AssetDetailsTab = "general" | "images" | "history";
 

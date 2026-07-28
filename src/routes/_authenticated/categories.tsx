@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Search, FolderTree } from "lucide-react";
 import { useSession, useRoles } from "@/hooks/use-auth";
-import { useMockDbRefresh } from "@/hooks/use-mock-db-refresh";
+import { useCategoryRows, useInvalidateAssetData } from "@/hooks/use-asset-management";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import {
   handleClickableRowClick,
   handleClickableRowKeyDown,
 } from "@/lib/clickable-table-row";
-import { MockDB, type CategoryRow } from "@/lib/mock-db";
+import type { CategoryRow } from "@/lib/types/asset-management";
 import { getCategoryIcon } from "@/lib/category-icons";
 import { CategoryDialog } from "@/components/category-dialog";
 import { CategoryActionsMenu } from "@/components/category-actions-menu";
@@ -32,23 +32,19 @@ const CATEGORY_STATUSES = ["active", "inactive"] as const;
 function CategoriesPage() {
   const { user } = useSession();
   const { canManage } = useRoles(user?.id);
-  const { tick: refreshTick, refresh: triggerRefresh } = useMockDbRefresh();
-
-  const [q, setQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [categories, setCategories] = useState<CategoryRow[]>([]);
+  const { data: categories = [], refetch } = useCategoryRows();
+  const invalidateAssetData = useInvalidateAssetData();
+  const triggerRefresh = () => {
+    void refetch();
+    invalidateAssetData();
+  };
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<CategoryRow | null>(null);
   const [viewCategory, setViewCategory] = useState<CategoryRow | null>(null);
   const [deleteCategory, setDeleteCategory] = useState<CategoryRow | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
-
-  useEffect(() => {
-    setCategories(MockDB.getCategoryRows());
-    if (viewCategory) {
-      setViewCategory(MockDB.getCategoryById(viewCategory.id));
-    }
-  }, [refreshTick]);
+  const [q, setQ] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();

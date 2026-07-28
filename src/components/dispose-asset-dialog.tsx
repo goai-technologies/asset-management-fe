@@ -14,7 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "@/components/status-badge";
 import { toast } from "sonner";
-import { MockDB, DISPOSAL_REASONS, type AssetRow } from "@/lib/mock-db";
+import { useDisposeAssetMutation } from "@/hooks/use-asset-management";
+import { DISPOSAL_REASONS, type AssetRow } from "@/lib/types/asset-management";
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -42,6 +43,7 @@ export function DisposeAssetDialog({
   const [disposalDate, setDisposalDate] = useState("");
   const [remarks, setRemarks] = useState("");
   const [saving, setSaving] = useState(false);
+  const disposeMutation = useDisposeAssetMutation();
 
   useEffect(() => {
     if (open) {
@@ -64,11 +66,14 @@ export function DisposeAssetDialog({
 
     setSaving(true);
     try {
-      MockDB.disposeAsset(asset.id, {
-        reason,
-        disposal_date: disposalDate,
-        remarks,
-        performedBy,
+      await disposeMutation.mutateAsync({
+        assetId: asset.id,
+        options: {
+          reason,
+          disposal_date: disposalDate,
+          remarks,
+          performedBy,
+        },
       });
       toast.success("✅ Asset disposed successfully.");
       onDisposed();

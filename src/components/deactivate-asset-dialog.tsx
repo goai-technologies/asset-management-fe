@@ -12,7 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/status-badge";
 import { toast } from "sonner";
-import { MockDB, type AssetRow } from "@/lib/mock-db";
+import { useDeactivateAssetMutation } from "@/hooks/use-asset-management";
+import type { AssetRow } from "@/lib/types/asset-management";
 import { AssetOwnerDisplay } from "@/components/asset-owner-display";
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -39,6 +40,7 @@ export function DeactivateAssetDialog({
 }) {
   const [remarks, setRemarks] = useState("");
   const [saving, setSaving] = useState(false);
+  const deactivateMutation = useDeactivateAssetMutation();
 
   useEffect(() => {
     if (open) {
@@ -51,7 +53,10 @@ export function DeactivateAssetDialog({
 
     setSaving(true);
     try {
-      MockDB.deactivateAsset(asset.id, { remarks, performedBy });
+      await deactivateMutation.mutateAsync({
+        assetId: asset.id,
+        options: { remarks, performedBy },
+      });
       toast.success("✅ Asset deactivated successfully.");
       onDeactivated();
       onOpenChange(false);

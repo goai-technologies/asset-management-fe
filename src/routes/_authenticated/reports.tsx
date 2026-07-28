@@ -1,6 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Download } from "lucide-react";
-import { MockDB } from "@/lib/mock-db";
+import { Download, FileSpreadsheet, FileText } from "lucide-react";
+import {
+  exportDataSnapshot,
+  fetchAssets,
+  fetchCategories,
+  fetchVendors,
+} from "@/lib/api/asset-management";
+import {
+  downloadAssetsExcel,
+  downloadAssetsPdf,
+  downloadAssignmentsExcel,
+  downloadAssignmentsPdf,
+} from "@/lib/api/reports";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,13 +27,18 @@ const REPORTS = [
     key: "inventory",
     title: "Asset Inventory",
     description: "Full list of every asset with category, status, cost, and location.",
-    build: () => {
-      const categories = new Map(MockDB.getCategories().map((c) => [c.id, c.category_name]));
-      const vendors = new Map(MockDB.getVendors().map((v) => [v.id, v.vendor_name]));
-      return MockDB.getAssets().map((a) => ({
+    build: async () => {
+      const [categories, vendors, assets] = await Promise.all([
+        fetchCategories(),
+        fetchVendors(),
+        fetchAssets(),
+      ]);
+      const categoryMap = new Map(categories.map((c) => [c.id, c.category_name]));
+      const vendorMap = new Map(vendors.map((v) => [v.id, v.vendor_name]));
+      return assets.map((a) => ({
         code: a.asset_code,
         name: a.asset_name,
-        category: a.category_id ? categories.get(a.category_id) ?? "" : "",
+        category: a.category_id ? categoryMap.get(a.category_id) ?? "" : "",
         brand: a.brand ?? "",
         model: a.model ?? "",
         serial: a.serial_number ?? "",
@@ -31,16 +47,20 @@ const REPORTS = [
         purchase_cost: a.purchase_cost ?? "",
         warranty_expiry: a.warranty_expiry ?? "",
         location: a.location ?? "",
-        vendor: a.vendor_id ? vendors.get(a.vendor_id) ?? "" : "",
+        vendor: a.vendor_id ? vendorMap.get(a.vendor_id) ?? "" : "",
       }));
+    },
+    exports: {
+      excel: () => downloadAssetsExcel(),
+      pdf: () => downloadAssetsPdf(),
     },
   },
   {
     key: "by-department",
     title: "Assets by Department",
     description: "Assets grouped by the department of the assigned employee.",
-    build: () => {
-      const snap = MockDB.exportSnapshot();
+    build: async () => {
+      const snap = await exportDataSnapshot();
       const employees = new Map(snap.employees.map((e) => [e.id, e]));
       const assets = new Map(snap.assets.map((a) => [a.id, a]));
       return snap.assignments
@@ -62,8 +82,8 @@ const REPORTS = [
     key: "assigned",
     title: "Assigned Assets",
     description: "All currently assigned assets with assignee and assignment date.",
-    build: () => {
-      const snap = MockDB.exportSnapshot();
+    build: async () => {
+      const snap = await exportDataSnapshot();
       const employees = new Map(snap.employees.map((e) => [e.id, e]));
       const assets = new Map(snap.assets.map((a) => [a.id, a]));
       return snap.assignments
@@ -81,13 +101,17 @@ const REPORTS = [
           };
         });
     },
+    exports: {
+      excel: () => downloadAssignmentsExcel(),
+      pdf: () => downloadAssignmentsPdf(),
+    },
   },
   {
     key: "employee",
     title: "Employee Assets",
     description: "One row per (employee, asset) pairing across all assignments.",
-    build: () => {
-      const snap = MockDB.exportSnapshot();
+    build: async () => {
+      const snap = await exportDataSnapshot();
       const employees = new Map(snap.employees.map((e) => [e.id, e]));
       const assets = new Map(snap.assets.map((a) => [a.id, a]));
       return snap.assignments.map((r) => {
@@ -105,15 +129,19 @@ const REPORTS = [
         };
       });
     },
+    exports: {
+      excel: () => downloadAssignmentsExcel(),
+      pdf: () => downloadAssignmentsPdf(),
+    },
   },
   {
     key: "repairs",
     title: "Repair Report",
     description: "Every repair record with issue, dates, cost, and vendor.",
-    build: () => {
-      const snap = MockDB.exportSnapshot();
+    build: async () => {
+      const [snap, vendors] = await Promise.all([exportDataSnapshot(), fetchVendors()]);
       const assets = new Map(snap.assets.map((a) => [a.id, a]));
-      const vendors = new Map(MockDB.getVendors().map((v) => [v.id, v.vendor_name]));
+      const vendorMap = new Map(vendors.map((v) => [v.id, v.vendor_name]));
       return snap.repairs.map((r) => {
         const a = assets.get(r.asset_id);
         return {
@@ -123,7 +151,7 @@ const REPORTS = [
           repair_date: r.created_at,
           completed_date: r.completed_at ?? "",
           cost: r.repair_cost ?? "",
-          vendor: r.vendor_id ? vendors.get(r.vendor_id) ?? "" : "",
+          vendor: r.vendor_id ? vendorMap.get(r.vendor_id) ?? "" : "",
           status: r.status,
         };
       });
@@ -133,16 +161,17 @@ const REPORTS = [
     key: "vendors",
     title: "Vendor Report",
     description: "Vendors and how many assets are linked to each.",
-    build: () => {
+    build: async () => {
+      const [assets, vendors] = await Promise.all([fetchAssets(), fetchVendors()]);
       const stats = new Map<string, { count: number; total: number }>();
-      for (const a of MockDB.getAssets()) {
+      for (const a of assets) {
         if (!a.vendor_id) continue;
         const s = stats.get(a.vendor_id) ?? { count: 0, total: 0 };
         s.count += 1;
         s.total += Number(a.purchase_cost ?? 0);
         stats.set(a.vendor_id, s);
       }
-      return MockDB.getVendors().map((v) => ({
+      return vendors.map((v) => ({
         vendor: v.vendor_name,
         contact: v.contact_person ?? "",
         email: v.email ?? "",
@@ -155,11 +184,30 @@ const REPORTS = [
 ];
 
 function ReportsPage() {
-  const run = (r: (typeof REPORTS)[number]) => {
-    const rows = r.build();
-    if (rows.length === 0) return toast.info("No data for this report.");
-    downloadCSV(r.key, rows);
-    toast.success(`${r.title} exported (${rows.length} rows)`);
+  const run = async (r: (typeof REPORTS)[number]) => {
+    try {
+      const rows = await r.build();
+      if (rows.length === 0) return toast.info("No data for this report.");
+      downloadCSV(r.key, rows);
+      toast.success(`${r.title} exported (${rows.length} rows)`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Export failed";
+      toast.error(message);
+    }
+  };
+
+  const runServerExport = async (
+    label: string,
+    exporter?: () => Promise<void>,
+  ) => {
+    if (!exporter) return;
+    try {
+      await exporter();
+      toast.success(`${label} downloaded`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Export failed";
+      toast.error(message);
+    }
   };
 
   return (
@@ -172,11 +220,23 @@ function ReportsPage() {
               <CardTitle>{r.title}</CardTitle>
               <CardDescription>{r.description}</CardDescription>
             </CardHeader>
-            <CardContent>
-              <Button onClick={() => run(r)}>
+            <CardContent className="flex flex-wrap gap-2">
+              <Button onClick={() => void run(r)}>
                 <Download className="h-4 w-4 mr-2" />
                 Export CSV
               </Button>
+              {r.exports?.excel && (
+                <Button variant="outline" onClick={() => void runServerExport(`${r.title} Excel`, r.exports?.excel)}>
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Export Excel
+                </Button>
+              )}
+              {r.exports?.pdf && (
+                <Button variant="outline" onClick={() => void runServerExport(`${r.title} PDF`, r.exports?.pdf)}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Export PDF
+                </Button>
+              )}
             </CardContent>
           </Card>
         ))}

@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { MockDB, VENDOR_TYPES, type Vendor } from "@/lib/mock-db";
+import { useCreateVendorMutation, useUpdateVendorMutation } from "@/hooks/use-asset-management";
+import { VENDOR_TYPES, type Vendor } from "@/lib/types/asset-management";
 
 export function VendorDialog({
   open, onOpenChange, onSaved, editing = null,
@@ -29,6 +30,8 @@ export function VendorDialog({
     notes: "",
   });
   const [saving, setSaving] = useState(false);
+  const createMutation = useCreateVendorMutation();
+  const updateMutation = useUpdateVendorMutation();
 
   useEffect(() => {
     if (open) {
@@ -87,10 +90,10 @@ export function VendorDialog({
       };
 
       if (editing) {
-        MockDB.updateVendor(editing.id, payload);
+        await updateMutation.mutateAsync({ id: editing.id, updates: payload });
         toast.success("Vendor updated successfully");
       } else {
-        MockDB.addVendor(payload);
+        await createMutation.mutateAsync(payload);
         toast.success("Vendor added successfully");
       }
       onSaved();

@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { MockDB, type VendorRow } from "@/lib/mock-db";
+import { useDeleteVendorMutation } from "@/hooks/use-asset-management";
+import type { VendorRow } from "@/lib/types/asset-management";
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -33,14 +34,15 @@ export function DeleteVendorDialog({
   onDeleted: () => void;
 }) {
   const [saving, setSaving] = useState(false);
-  const linkedCount = vendor ? MockDB.getVendorLinkedAssetCount(vendor.id) : 0;
+  const deleteMutation = useDeleteVendorMutation();
+  const linkedCount = vendor?.linked_asset_count ?? 0;
   const hasLinkedAssets = linkedCount > 0;
 
   const handleConfirm = async () => {
     if (!vendor || hasLinkedAssets) return;
     setSaving(true);
     try {
-      MockDB.deleteVendor(vendor.id);
+      await deleteMutation.mutateAsync(vendor.id);
       toast.success("Vendor deleted successfully");
       onDeleted();
       onOpenChange(false);

@@ -17,7 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useNotifications } from "@/hooks/use-notifications";
 import { checkWarrantyNotifications } from "@/lib/notifications";
-import { MockDB } from "@/lib/mock-db";
+import { useAssets } from "@/hooks/use-asset-management";
 import type { Notification, NotificationCategory } from "@/lib/notifications";
 
 const CATEGORY_STYLES: Record<
@@ -107,15 +107,17 @@ function NotificationItem({
 
 export function NotificationCenter() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification, clearAll } = useNotifications();
+  const { data: assets = [] } = useAssets();
 
   useEffect(() => {
-    const assets = MockDB.getAssets().map((a) => ({
-      id: a.id,
-      asset_name: a.asset_name,
-      warranty_expiry: a.warranty_expiry,
-    }));
-    checkWarrantyNotifications(assets);
-  }, []);
+    checkWarrantyNotifications(
+      assets.map((a) => ({
+        id: a.id,
+        asset_name: a.asset_name,
+        warranty_expiry: a.warranty_expiry,
+      })),
+    );
+  }, [assets]);
 
   return (
     <Popover>

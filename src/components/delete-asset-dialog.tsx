@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { MockDB, AssetRow } from "@/lib/mock-db";
+import { useSoftDeleteAssetMutation } from "@/hooks/use-asset-management";
+import type { AssetRow } from "@/lib/types/asset-management";
 import { AssetOwnerDisplay } from "@/components/asset-owner-display";
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -34,12 +35,13 @@ export function DeleteAssetDialog({
   onDeleted: () => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const deleteMutation = useSoftDeleteAssetMutation();
 
   const handleConfirm = async () => {
     if (!asset) return;
     setSaving(true);
     try {
-      MockDB.softDeleteAsset(asset.id);
+      await deleteMutation.mutateAsync(asset.id);
       toast.success("🗑️ Asset deleted successfully.");
       onDeleted();
       onOpenChange(false);

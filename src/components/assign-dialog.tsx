@@ -6,7 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { MockDB, AssetRow } from "@/lib/mock-db";
+import { useAssets, useAssignAssetMutation, useEmployees } from "@/hooks/use-asset-management";
+import type { AssetRow } from "@/lib/types/asset-management";
 
 export function AssignDialog({
   open, onOpenChange, preSelectedAssetId, onSaved,
@@ -23,19 +24,21 @@ export function AssignDialog({
     expected_return: "",
     notes: "",
   });
-  
+
   const [saving, setSaving] = useState(false);
-  const [availableAssets, setAvailableAssets] = useState<AssetRow[]>([]);
-  const employees = MockDB.getEmployees();
+  const { data: allAssets = [] } = useAssets();
+  const { data: employees = [] } = useEmployees();
+  const assignMutation = useAssignAssetMutation();
+
+  const availableAssets = allAssets.filter(
+    (a) => a.status === "available" || a.id === preSelectedAssetId,
+  );
   const selectedAsset =
     availableAssets.find((a) => a.id === form.asset_id) ??
-    (form.asset_id ? MockDB.getAssets().find((a) => a.id === form.asset_id) ?? null : null);
+    (form.asset_id ? allAssets.find((a) => a.id === form.asset_id) ?? null : null);
 
   useEffect(() => {
     if (open) {
-      // Only show assets that are 'available' or the currently pre-selected one
-      const assets = MockDB.getAssets().filter(a => a.status === 'available' || a.id === preSelectedAssetId);
-      setAvailableAssets(assets);
       setForm({
         asset_id: preSelectedAssetId || "",
         employee_id: "",
@@ -49,7 +52,7 @@ export function AssignDialog({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    
+
     if (!form.asset_id || !form.employee_id || !form.assigned_date) {
       toast.error("Please select an Asset, an Employee, and an Assigned Date.");
       setSaving(false);
@@ -57,18 +60,19 @@ export function AssignDialog({
     }
 
     try {
-      MockDB.assignAsset(
-        form.asset_id, 
-        form.employee_id, 
-        form.assigned_date, 
-        form.expected_return || null, 
-        form.notes || null
-      );
+      await assignMutation.mutateAsync({
+        assetId: form.asset_id,
+        employeeId: form.employee_id,
+        assignedDate: form.assigned_date,
+        expectedReturn: form.expected_return || null,
+        notes: form.notes || null,
+      });
       toast.success("Asset assigned successfully");
       onSaved();
       onOpenChange(false);
-    } catch (error: any) {
-      toast.error(error.message || "An error occurred");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "An error occurred";
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -105,7 +109,7 @@ export function AssignDialog({
               </div>
             )}
           </Field>
-          
+
           <Field label="Assigned to" required>
             <Select value={form.employee_id} onValueChange={(v) => setForm({ ...form, employee_id: v })}>
               <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
@@ -118,19 +122,19 @@ export function AssignDialog({
               </SelectContent>
             </Select>
           </Field>
-          
+
           <Field label="Assigned Date" required>
             <Input type="date" value={form.assigned_date} required onChange={(e) => setForm({ ...form, assigned_date: e.target.value })} />
           </Field>
-          
+
           <Field label="Expected Return">
             <Input type="date" value={form.expected_return} onChange={(e) => setForm({ ...form, expected_return: e.target.value })} />
           </Field>
-          
+
           <Field label="Notes">
             <Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </Field>
-          
+
           <DialogFooter className="pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Assign Asset"}</Button>

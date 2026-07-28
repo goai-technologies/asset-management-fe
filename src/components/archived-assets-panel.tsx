@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { Archive, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { MockDB } from "@/lib/mock-db";
-import { useMockDbRefresh } from "@/hooks/use-mock-db-refresh";
+import {
+  useArchivedAssets,
+  usePermanentlyDeleteAssetMutation,
+  useRestoreAssetMutation,
+} from "@/hooks/use-asset-management";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -19,26 +22,35 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export function ArchivedAssetsPanel() {
-  const { refresh: triggerRefresh } = useMockDbRefresh();
   const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null);
-  const archived = MockDB.getArchivedAssets();
+  const { data: archived = [] } = useArchivedAssets();
+  const restoreMutation = useRestoreAssetMutation();
+  const permanentDeleteMutation = usePermanentlyDeleteAssetMutation();
 
   const assetToDelete = permanentDeleteId
     ? archived.find((a) => a.id === permanentDeleteId) ?? null
     : null;
 
-  const handleRestore = (id: string) => {
-    MockDB.restoreAsset(id);
-    toast.success("Asset restored successfully");
-    triggerRefresh();
+  const handleRestore = async (id: string) => {
+    try {
+      await restoreMutation.mutateAsync(id);
+      toast.success("Asset restored successfully");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "An error occurred";
+      toast.error(message);
+    }
   };
 
-  const handlePermanentDelete = () => {
+  const handlePermanentDelete = async () => {
     if (!permanentDeleteId) return;
-    MockDB.permanentlyDeleteAsset(permanentDeleteId);
-    toast.success("Asset permanently deleted");
-    setPermanentDeleteId(null);
-    triggerRefresh();
+    try {
+      await permanentDeleteMutation.mutateAsync(permanentDeleteId);
+      toast.success("Asset permanently deleted");
+      setPermanentDeleteId(null);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "An error occurred";
+      toast.error(message);
+    }
   };
 
   return (
@@ -78,7 +90,12 @@ export function ArchivedAssetsPanel() {
                     <TableCell><StatusBadge status={a.status} /></TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" onClick={() => handleRestore(a.id)}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRestore(a.id)}
+                          disabled={restoreMutation.isPending}
+                        >
                           <RotateCcw className="h-3.5 w-3.5 mr-1" />
                           Restore
                         </Button>
@@ -111,7 +128,11 @@ export function ArchivedAssetsPanel() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <Button variant="destructive" onClick={handlePermanentDelete}>
+            <Button
+              variant="destructive"
+              onClick={handlePermanentDelete}
+              disabled={permanentDeleteMutation.isPending}
+            >
               Permanently Delete
             </Button>
           </AlertDialogFooter>

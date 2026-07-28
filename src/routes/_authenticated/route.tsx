@@ -1,12 +1,11 @@
 import { createFileRoute, Outlet, redirect, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { AuthUser } from "@/lib/api/auth-types";
 import {
-  LayoutDashboard, Boxes, LogOut, Menu, User as UserIcon, Settings, Users, Store, FolderTree,
+  LayoutDashboard, Boxes, LogOut, Menu, User as UserIcon, Settings, Users, Store, FolderTree, Shield,
 } from "lucide-react";
 import { getSession, signOut } from "@/lib/api/auth";
-import { initAssetDbFromApi } from "@/lib/mock-db";
 import { useSession, useRoles } from "@/hooks/use-auth";
 import { useUserProfile } from "@/hooks/use-user-account";
 import { Button } from "@/components/ui/button";
@@ -44,12 +43,6 @@ function AuthedLayout() {
   const { roles, isAdmin, isIt, loading: rolesLoading } = useRoles(user?.id);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  useEffect(() => {
-    void initAssetDbFromApi().catch((error) => {
-      console.error("[AssetDB] Failed to initialize:", error);
-    });
-  }, []);
-
   const roleLabel = isAdmin ? "Administrator" : isIt ? "IT Team" : "Employee";
   const items = NAV.filter((n) => roles.some((r) => (n.roles as readonly string[]).includes(r))
     || (rolesLoading && n.to === "/dashboard"));
@@ -80,12 +73,14 @@ function SidebarInner({
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
     <>
-      <div className="h-16 px-5 flex items-center gap-2 border-b border-sidebar-border">
-        <div className="h-9 w-9 rounded-md bg-primary text-primary-foreground grid place-items-center">
-          <Boxes className="h-5 w-5" />
-        </div>
-        <div>
-          <div className="font-bold leading-tight text-sm">goAI Asset Management</div>
+      <div className="h-16 px-4 flex items-center gap-3 border-b border-sidebar-border">
+        <img
+          src="/assets/goai-logo.png"
+          alt="goAI"
+          className="h-9 w-auto max-w-[96px] shrink-0 rounded-md bg-white px-2 py-1 object-contain"
+        />
+        <div className="min-w-0">
+          <div className="font-bold leading-tight text-sm">Asset Management</div>
           <div className="text-[10px] tracking-wide text-sidebar-foreground/60 leading-snug">Manage, Assign & Track Company Assets</div>
         </div>
       </div>
@@ -125,6 +120,7 @@ function TopBar({ onMenu, user, roleLabel }: { onMenu: () => void; user: AuthUse
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { profile } = useUserProfile(user, roleLabel);
+  const { isAdmin } = useRoles(user?.id);
 
   const handleSignOut = async () => {
     await queryClient.cancelQueries();
@@ -174,8 +170,13 @@ function TopBar({ onMenu, user, roleLabel }: { onMenu: () => void; user: AuthUse
               <Link to="/my-assets"><Boxes className="h-4 w-4 mr-2" />My Assets</Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild className={menuItemClass("/account-settings")}>
-              <Link to="/account-settings"><Settings className="h-4 w-4 mr-2" />Settings</Link>
+              <Link to="/account-settings"><Settings className="h-4 w-4 mr-2" />Account Settings</Link>
             </DropdownMenuItem>
+            {isAdmin && (
+              <DropdownMenuItem asChild className={menuItemClass("/settings")}>
+                <Link to="/settings"><Shield className="h-4 w-4 mr-2" />System Settings</Link>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
               <LogOut className="h-4 w-4 mr-2" />Sign out

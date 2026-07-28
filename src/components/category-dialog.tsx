@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { MockDB, type Category } from "@/lib/mock-db";
+import { useCreateCategoryMutation, useUpdateCategoryMutation } from "@/hooks/use-asset-management";
+import type { Category } from "@/lib/types/asset-management";
 import { CATEGORY_ICON_OPTIONS } from "@/lib/category-icons";
 
 export function CategoryDialog({
@@ -25,6 +26,8 @@ export function CategoryDialog({
   });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const createMutation = useCreateCategoryMutation();
+  const updateMutation = useUpdateCategoryMutation();
 
   useEffect(() => {
     if (open) {
@@ -67,10 +70,10 @@ export function CategoryDialog({
       };
 
       if (editing) {
-        MockDB.updateCategory(editing.id, payload);
+        await updateMutation.mutateAsync({ id: editing.id, updates: payload });
         toast.success("Category updated successfully");
       } else {
-        MockDB.addCategory(payload);
+        await createMutation.mutateAsync(payload);
         toast.success("Category added successfully");
       }
       onSaved();

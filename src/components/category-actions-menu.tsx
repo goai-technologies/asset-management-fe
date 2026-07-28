@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { CategoryRow } from "@/lib/mock-db";
+import type { CategoryRow } from "@/lib/types/asset-management";
 
 export function CategoryActionsMenu({
   category,

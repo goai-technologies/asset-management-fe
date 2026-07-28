@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AuthUser } from "@/lib/api/auth-types";
-import { MockDB } from "@/lib/mock-db";
+import {
+  useEmployeeAssignedAssets,
+  useEmployeeAssignments,
+  useEmployees,
+} from "@/hooks/use-asset-management";
+import type { Employee } from "@/lib/types/asset-management";
 import {
   UserAccountStore,
   USER_ACCOUNT_CHANGED,
@@ -19,15 +24,18 @@ export type ResolvedUserProfile = {
   department: string | null;
 };
 
-function findEmployeeByEmail(email?: string | null) {
+function findEmployeeByEmail(employees: Employee[], email?: string | null) {
   if (!email) return null;
   const needle = email.trim().toLowerCase();
-  return MockDB.getEmployees().find((e) => e.email.trim().toLowerCase() === needle) ?? null;
+  return employees.find((e) => e.email.trim().toLowerCase() === needle) ?? null;
 }
 
-function buildDefaults(user: AuthUser | null, roleLabel: string): ResolvedUserProfile {
+function buildDefaults(
+  user: AuthUser | null,
+  roleLabel: string,
+  employee: Employee | null,
+): ResolvedUserProfile {
   const email = user?.email ?? "";
-  const employee = findEmployeeByEmail(email);
   const metaName = typeof user?.user_metadata?.name === "string" ? user.user_metadata.name : "";
   const stored = user?.id ? UserAccountStore.getProfile(user.id) : null;
 
@@ -45,6 +53,11 @@ function buildDefaults(user: AuthUser | null, roleLabel: string): ResolvedUserPr
 
 export function useUserProfile(user: AuthUser | null, roleLabel: string) {
   const [version, setVersion] = useState(0);
+  const { data: employees = [] } = useEmployees();
+  const employee = useMemo(
+    () => findEmployeeByEmail(employees, user?.email),
+    [employees, user?.email],
+  );
 
   useEffect(() => {
     const onChange = () => setVersion((v) => v + 1);
@@ -53,8 +66,8 @@ export function useUserProfile(user: AuthUser | null, roleLabel: string) {
   }, []);
 
   const profile = useMemo(
-    () => buildDefaults(user, roleLabel),
-    [user, roleLabel, version],
+    () => buildDefaults(user, roleLabel, employee),
+    [user, roleLabel, employee, version],
   );
 
   const saveProfile = useCallback(
@@ -98,8 +111,14 @@ export function useUserPreferences(userId: string | null | undefined) {
   return { preferences, savePreferences };
 }
 
-export function getMyAssignedAssets(email?: string | null) {
-  const employee = findEmployeeByEmail(email);
-  if (!employee) return { employee: null, assets: [] as ReturnType<typeof MockDB.getEmployeeAssignedAssets> };
-  return { employee, assets: MockDB.getEmployeeAssignedAssets(employee.id) };
+export function useMyAssignedAssets(email?: string | null) {
+  const { data: employees = [] } = useEmployees();
+  const employee = useMemo(
+    () => findEmployeeByEmail(employees, email),
+    [employees, email],
+  );
+  const { data: assets = [] } = useEmployeeAssignedAssets(employee?.id);
+  const { data: assignments = [] } = useEmployeeAssignments(employee?.id);
+
+  return { employee, assets, assignments };
 }

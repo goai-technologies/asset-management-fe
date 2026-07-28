@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState, useEffect } from "react";
-import { Plus, Search, Download, Trash2, ArrowLeftRight, Boxes, History, UserPlus } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus, Search, Download, Trash2, ArrowLeftRight, Boxes, History, UserPlus, Archive } from "lucide-react";
 import { useSession, useRoles } from "@/hooks/use-auth";
-import { useMockDbRefresh } from "@/hooks/use-mock-db-refresh";
+import { useAssets, useCategories, useAssetAssignments, useSoftDeleteAssetMutation, useInvalidateAssetData } from "@/hooks/use-asset-management";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/empty-state";
@@ -22,7 +22,7 @@ import {
   handleClickableRowClick,
   handleClickableRowKeyDown,
 } from "@/lib/clickable-table-row";
-import { MockDB, AssetRow } from "@/lib/mock-db";
+import type { AssetRow } from "@/lib/types/asset-management";
 import { AssetDialog } from "@/components/asset-dialog";
 import { EmployeeDialog } from "@/components/employee-dialog";
 import { AssignDialog } from "@/components/assign-dialog";
@@ -33,6 +33,7 @@ import { AssetActionsMenu, type AssetDetailsTab } from "@/components/asset-actio
 import { AssetOwnerDisplay } from "@/components/asset-owner-display";
 import { AssetImageGallery } from "@/components/asset-images/asset-image-gallery";
 import { RepairHistoryDialog } from "@/components/repair-history-dialog";
+import { ArchivedAssetsPanel } from "@/components/archived-assets-panel";
 
 export const Route = createFileRoute("/_authenticated/assets")({
   component: AssetsPage,
@@ -42,7 +43,8 @@ const STATUSES = ["available","assigned","reserved","repair","lost","inactive","
 
 function AssetsPage() {
   const { user } = useSession();
-  const { canManage } = useRoles(user?.id);
+  const { canManage, isAdmin } = useRoles(user?.id);
+  const [inventoryView, setInventoryView] = useState<"active" | "archived">("active");
   const performerName = (user?.user_metadata?.name as string | undefined) ?? user?.email ?? "Administrator";
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -66,18 +68,14 @@ function AssetsPage() {
   
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const { tick: refreshTick, refresh: triggerRefresh } = useMockDbRefresh();
-
-  const [assets, setAssets] = useState<AssetRow[]>([]);
-  const categories = MockDB.getCategories();
-  
-  useEffect(() => {
-    setAssets(MockDB.getAssets());
-    // Also refresh the viewAsset if it's currently open
-    if (viewAsset) {
-      setViewAsset(MockDB.getAssets().find(a => a.id === viewAsset.id) || null);
-    }
-  }, [refreshTick]);
+  const { data: assets = [], refetch: refetchAssets } = useAssets();
+  const { data: categories = [] } = useCategories();
+  const softDeleteMutation = useSoftDeleteAssetMutation();
+  const invalidateAssetData = useInvalidateAssetData();
+  const triggerRefresh = () => {
+    void refetchAssets();
+    invalidateAssetData();
+  };
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -110,13 +108,13 @@ function AssetsPage() {
     setViewTab(tab);
   };
 
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     if (!canManage) return;
-    selectedIds.forEach((id) => MockDB.softDeleteAsset(id));
+    await Promise.all([...selectedIds].map((id) => softDeleteMutation.mutateAsync(id)));
     toast.success(`🗑️ ${selectedIds.size} asset${selectedIds.size > 1 ? "s" : ""} deleted successfully.`);
     setSelectedIds(new Set());
     if (viewAsset && selectedIds.has(viewAsset.id)) setViewAsset(null);
-    triggerRefresh();
+    void refetchAssets();
   };
 
   const exportCSV = () => {
@@ -161,6 +159,26 @@ function AssetsPage() {
         }
       />
 
+      {isAdmin && (
+        <Tabs
+          value={inventoryView}
+          onValueChange={(value) => setInventoryView(value as "active" | "archived")}
+          className="mb-4"
+        >
+          <TabsList>
+            <TabsTrigger value="active">Active Inventory</TabsTrigger>
+            <TabsTrigger value="archived" className="gap-2">
+              <Archive className="h-4 w-4" />
+              Archived
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
+
+      {inventoryView === "archived" && isAdmin ? (
+        <ArchivedAssetsPanel />
+      ) : (
+        <>
       <Card className="mb-4">
         <CardContent className="p-4 flex flex-col md:flex-row gap-3 items-center">
           <div className="relative flex-1 w-full">
@@ -283,6 +301,8 @@ function AssetsPage() {
           )}
         </CardContent>
       </Card>
+        </>
+      )}
 
       {/* Asset Dialog — create (IT/Admin) or edit (Admin) */}
       {canManage && (
@@ -409,7 +429,7 @@ function AssetsPage() {
 
                 <TabsContent value="images" className="space-y-4">
                   <AssetImageGallery
-                    key={`${viewAsset.id}-${refreshTick}`}
+                    key={viewAsset.id}
                     assetId={viewAsset.id}
                     canManage={canManage}
                     onChange={triggerRefresh}
@@ -429,7 +449,7 @@ function AssetsPage() {
 }
 
 function AssignmentHistoryList({ assetId }: { assetId: string }) {
-  const assignments = MockDB.getAssetAssignments(assetId);
+  const { data: assignments = [] } = useAssetAssignments(assetId);
 
   if (assignments.length === 0) {
     return (

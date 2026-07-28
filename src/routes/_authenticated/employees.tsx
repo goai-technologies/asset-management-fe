@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Search, Download, Users, History, Wrench } from "lucide-react";
 import { useSession, useRoles } from "@/hooks/use-auth";
-import { useMockDbRefresh } from "@/hooks/use-mock-db-refresh";
+import { useEmployeeRows, useEmployeeAssignedAssets, useEmployeeAssignments, useEmployeeRepairHistory, useInvalidateAssetData } from "@/hooks/use-asset-management";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { StatusBadge } from "@/components/status-badge";
@@ -21,7 +21,7 @@ import {
   handleClickableRowClick,
   handleClickableRowKeyDown,
 } from "@/lib/clickable-table-row";
-import { MockDB, type EmployeeRow } from "@/lib/mock-db";
+import type { EmployeeRow } from "@/lib/types/asset-management";
 import { EmployeeDialog } from "@/components/employee-dialog";
 import { EmployeeActionsMenu, type EmployeeDetailsTab } from "@/components/employee-actions-menu";
 import { DeleteEmployeeDialog } from "@/components/delete-employee-dialog";
@@ -35,27 +35,22 @@ const EMPLOYEE_STATUSES = ["active", "inactive"] as const;
 function EmployeesPage() {
   const { user } = useSession();
   const { canManage } = useRoles(user?.id);
-  const { tick: refreshTick, refresh: triggerRefresh } = useMockDbRefresh();
-
-  const [q, setQ] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [locationFilter, setLocationFilter] = useState("all");
-
-  const [employees, setEmployees] = useState<EmployeeRow[]>([]);
+  const { data: employees = [], refetch } = useEmployeeRows();
+  const invalidateAssetData = useInvalidateAssetData();
+  const triggerRefresh = () => {
+    void refetch();
+    invalidateAssetData();
+  };
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<EmployeeRow | null>(null);
   const [viewEmployee, setViewEmployee] = useState<EmployeeRow | null>(null);
   const [viewTab, setViewTab] = useState<EmployeeDetailsTab>("general");
   const [deleteEmployee, setDeleteEmployee] = useState<EmployeeRow | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
-
-  useEffect(() => {
-    setEmployees(MockDB.getEmployeeRows());
-    if (viewEmployee) {
-      setViewEmployee(MockDB.getEmployeeById(viewEmployee.id));
-    }
-  }, [refreshTick]);
+  const [q, setQ] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [locationFilter, setLocationFilter] = useState("all");
 
   const departments = useMemo(
     () => [...new Set(employees.map((e) => e.department).filter(Boolean))] as string[],
@@ -296,15 +291,15 @@ function EmployeesPage() {
                 </TabsContent>
 
                 <TabsContent value="assets">
-                  <AssignedAssetsList employeeId={viewEmployee.id} refreshTick={refreshTick} />
+                  <AssignedAssetsList employeeId={viewEmployee.id} />
                 </TabsContent>
 
                 <TabsContent value="history">
-                  <AssignmentHistoryList employeeId={viewEmployee.id} refreshTick={refreshTick} />
+                  <AssignmentHistoryList employeeId={viewEmployee.id} />
                 </TabsContent>
 
                 <TabsContent value="repairs">
-                  <RepairHistoryList employeeId={viewEmployee.id} refreshTick={refreshTick} />
+                  <RepairHistoryList employeeId={viewEmployee.id} />
                 </TabsContent>
               </Tabs>
             </>
@@ -338,8 +333,9 @@ function DetailItem({ label, value, className }: { label: string; value?: React.
   );
 }
 
-function AssignedAssetsList({ employeeId, refreshTick }: { employeeId: string; refreshTick: number }) {
-  const assets = useMemo(() => MockDB.getEmployeeAssignedAssets(employeeId), [employeeId, refreshTick]);
+function AssignedAssetsList({ employeeId }: { employeeId: string }) {
+  const { data: assets = [] } = useEmployeeAssignedAssets(employeeId);
+  const { data: assignments = [] } = useEmployeeAssignments(employeeId);
 
   if (assets.length === 0) {
     return (
@@ -364,7 +360,7 @@ function AssignedAssetsList({ employeeId, refreshTick }: { employeeId: string; r
         </TableHeader>
         <TableBody>
           {assets.map((asset) => {
-            const assignment = MockDB.getEmployeeAssignments(employeeId)
+            const assignment = assignments
               .find((a) => a.asset_id === asset.id && a.status === "assigned");
             return (
               <TableRow key={asset.id}>
@@ -381,8 +377,8 @@ function AssignedAssetsList({ employeeId, refreshTick }: { employeeId: string; r
   );
 }
 
-function AssignmentHistoryList({ employeeId, refreshTick }: { employeeId: string; refreshTick: number }) {
-  const assignments = useMemo(() => MockDB.getEmployeeAssignments(employeeId), [employeeId, refreshTick]);
+function AssignmentHistoryList({ employeeId }: { employeeId: string }) {
+  const { data: assignments = [] } = useEmployeeAssignments(employeeId);
 
   if (assignments.length === 0) {
     return (
@@ -442,8 +438,8 @@ function AssignmentHistoryList({ employeeId, refreshTick }: { employeeId: string
   );
 }
 
-function RepairHistoryList({ employeeId, refreshTick }: { employeeId: string; refreshTick: number }) {
-  const repairs = useMemo(() => MockDB.getEmployeeRepairHistory(employeeId), [employeeId, refreshTick]);
+function RepairHistoryList({ employeeId }: { employeeId: string }) {
+  const { data: repairs = [] } = useEmployeeRepairHistory(employeeId);
 
   if (repairs.length === 0) {
     return (

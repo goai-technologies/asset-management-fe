@@ -5,8 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { shortDate, dateTime } from "@/lib/format";
-import { MockDB } from "@/lib/mock-db";
-import { useMockDbRefresh } from "@/hooks/use-mock-db-refresh";
+import { useDashboardData } from "@/hooks/use-asset-management";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
@@ -15,20 +14,27 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 const CHART_COLORS = ["#2563EB", "#0891B2", "#059669", "#D97706", "#DC2626", "#7C3AED", "#DB2777"];
 
 function Dashboard() {
-  useMockDbRefresh();
+  const { data, isLoading } = useDashboardData();
 
-  const stats = MockDB.getDashboardStats();
-  const recent = MockDB.getRecentAssignments(6);
-  const assets = MockDB.getAssets();
-  const openRepairs = MockDB.getOpenRepairs();
+  const stats = data?.stats ?? {
+    totalAssets: 0,
+    totalEmployees: 0,
+    byStatus: {} as Record<string, number>,
+    byCategory: {} as Record<string, number>,
+    openRepairTickets: 0,
+  };
+  const recent = data?.recentAssignments ?? [];
+  const openRepairs = data?.openRepairs ?? [];
 
-  const expiringWarranty = assets
-    .filter(a => a.warranty_expiry)
-    .map(a => {
-      const days = Math.floor((new Date(a.warranty_expiry!).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
+  const expiringWarranty = (data?.warrantyExpiring ?? [])
+    .filter((a) => a.warranty_expiry)
+    .map((a) => {
+      const days = Math.floor(
+        (new Date(a.warranty_expiry!).getTime() - new Date().getTime()) / (1000 * 3600 * 24),
+      );
       return { ...a, days };
     })
-    .filter(a => a.days > 0 && a.days <= 90)
+    .filter((a) => a.days > 0 && a.days <= 90)
     .sort((a, b) => a.days - b.days)
     .slice(0, 5);
 
@@ -37,7 +43,7 @@ function Dashboard() {
     { label: "Assigned Assets", value: stats.byStatus.assigned || 0, icon: UserCheck, tint: "text-info bg-info/10" },
     { label: "Available Assets", value: stats.byStatus.available || 0, icon: CheckCircle2, tint: "text-success bg-success/10" },
     { label: "Under Repair", value: stats.byStatus.repair || 0, icon: Wrench, tint: "text-warning-foreground bg-warning/20" },
-    { label: "Retired", value: (stats.byStatus.retired || 0) + (stats.byStatus.disposed || 0), icon: Archive, tint: "text-muted-foreground bg-muted" },
+    { label: "Retired", value: (stats.byStatus.retired || 0) + (stats.byStatus.disposed || 0) + (stats.byStatus.inactive || 0), icon: Archive, tint: "text-muted-foreground bg-muted" },
     { label: "Employees", value: stats.totalEmployees, icon: Users, tint: "text-primary bg-primary/10" },
   ];
 
@@ -46,6 +52,15 @@ function Dashboard() {
     name: name === "repair" ? "Under Repair" : name.replace(/\b\w/g, (c) => c.toUpperCase()),
     value,
   }));
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Dashboard" description="Overview of asset inventory, allocation, and activity." />
+        <div className="text-sm text-muted-foreground">Loading dashboard…</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
