@@ -151,21 +151,34 @@ export type AdminUser = {
 };
 
 export async function getAdminUsers(): Promise<AdminUser[]> {
-  const session = await getSession();
-  if (!session) return [];
-
-  const roles = await getRoles(session.user.id);
-  const role = roles[0] ?? "employee";
-  return [
-    {
-      id: session.user.id,
-      name: session.user.user_metadata?.name ?? session.user.email,
-      email: session.user.email,
-      role,
-    },
-  ];
+  try {
+    const users = await apiGet<AdminUser[]>("/auth/users");
+    return users.map((user) => ({
+      ...user,
+      role: toAppRole(user.role) ?? "employee",
+    }));
+  } catch {
+    return [];
+  }
 }
 
-export async function setUserRole(_userId: string, _role: AppRole): Promise<{ error?: string }> {
-  return { error: "User role management is not available via the REST API yet." };
+export async function setUserRole(userId: string, role: AppRole): Promise<{ error?: string }> {
+  try {
+    const result = await apiPut<{ accessToken?: string; user?: Profile }>(
+      `/auth/users/${userId}/role`,
+      { role },
+    );
+    if (result.accessToken && result.user) {
+      setStoredSession(toSession(result.accessToken, result.user));
+    } else if (result.user) {
+      const token = getStoredToken();
+      if (token) {
+        setStoredSession(toSession(token, result.user));
+      }
+    }
+    notifyAuthChanged();
+    return {};
+  } catch (error: unknown) {
+    return { error: error instanceof Error ? error.message : "Role update failed" };
+  }
 }

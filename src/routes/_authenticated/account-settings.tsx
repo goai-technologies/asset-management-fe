@@ -58,8 +58,6 @@ function AccountSettingsPage() {
       {isAdmin && (
         <p className="text-sm text-muted-foreground mb-6 -mt-2">
           Looking for archived assets or user management? Open{" "}
-          <Link to="/assets" className="text-primary hover:underline">Assets → Archived</Link>
-          {" "}or{" "}
           <Link to="/settings" className="text-primary hover:underline">System Settings</Link>.
         </p>
       )}

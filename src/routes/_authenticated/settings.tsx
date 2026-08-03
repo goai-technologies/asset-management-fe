@@ -22,6 +22,8 @@ function SettingsPage() {
   const qc = useQueryClient();
   const { user } = useSession();
   const { isAdmin, loading } = useRoles(user?.id);
+  const isDevMode = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "true";
+  const canChangeOwnRole = isDevMode;
 
   const { data: users = [] } = useQuery({
     queryKey: ["all-users"],
@@ -84,7 +86,11 @@ function SettingsPage() {
                   <TableCell className="font-medium">{u.name || "—"}</TableCell>
                   <TableCell>{u.email}</TableCell>
                   <TableCell>
-                    <Select value={u.role} onValueChange={(v) => setRole(u.id, v as AppRole)} disabled={u.id === user?.id}>
+                    <Select
+                      value={u.role}
+                      onValueChange={(v) => setRole(u.id, v as AppRole)}
+                      disabled={u.id === user?.id && !canChangeOwnRole}
+                    >
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="administrator">Administrator</SelectItem>
@@ -92,7 +98,9 @@ function SettingsPage() {
                         <SelectItem value="employee">Employee</SelectItem>
                       </SelectContent>
                     </Select>
-                    {u.id === user?.id && <p className="text-xs text-muted-foreground mt-1">You cannot change your own role.</p>}
+                    {u.id === user?.id && !canChangeOwnRole && (
+                      <p className="text-xs text-muted-foreground mt-1">You cannot change your own role.</p>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

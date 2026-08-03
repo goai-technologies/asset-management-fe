@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Plus, Search, Download, Trash2, ArrowLeftRight, Boxes, History, UserPlus, Archive } from "lucide-react";
+import { Plus, Search, Download, Trash2, ArrowLeftRight, Boxes, History, UserPlus } from "lucide-react";
 import { useSession, useRoles } from "@/hooks/use-auth";
 import { useAssets, useCategories, useAssetAssignments, useSoftDeleteAssetMutation, useInvalidateAssetData } from "@/hooks/use-asset-management";
 import { PageHeader } from "@/components/page-header";
@@ -33,7 +33,6 @@ import { AssetActionsMenu, type AssetDetailsTab } from "@/components/asset-actio
 import { AssetOwnerDisplay } from "@/components/asset-owner-display";
 import { AssetImageGallery } from "@/components/asset-images/asset-image-gallery";
 import { RepairHistoryDialog } from "@/components/repair-history-dialog";
-import { ArchivedAssetsPanel } from "@/components/archived-assets-panel";
 
 export const Route = createFileRoute("/_authenticated/assets")({
   component: AssetsPage,
@@ -43,8 +42,7 @@ const STATUSES = ["available","assigned","reserved","repair","lost","inactive","
 
 function AssetsPage() {
   const { user } = useSession();
-  const { canManage, isAdmin } = useRoles(user?.id);
-  const [inventoryView, setInventoryView] = useState<"active" | "archived">("active");
+  const { canManage } = useRoles(user?.id);
   const performerName = (user?.user_metadata?.name as string | undefined) ?? user?.email ?? "Administrator";
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -159,26 +157,6 @@ function AssetsPage() {
         }
       />
 
-      {isAdmin && (
-        <Tabs
-          value={inventoryView}
-          onValueChange={(value) => setInventoryView(value as "active" | "archived")}
-          className="mb-4"
-        >
-          <TabsList>
-            <TabsTrigger value="active">Active Inventory</TabsTrigger>
-            <TabsTrigger value="archived" className="gap-2">
-              <Archive className="h-4 w-4" />
-              Archived
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      )}
-
-      {inventoryView === "archived" && isAdmin ? (
-        <ArchivedAssetsPanel />
-      ) : (
-        <>
       <Card className="mb-4">
         <CardContent className="p-4 flex flex-col md:flex-row gap-3 items-center">
           <div className="relative flex-1 w-full">
@@ -301,8 +279,6 @@ function AssetsPage() {
           )}
         </CardContent>
       </Card>
-        </>
-      )}
 
       {/* Asset Dialog — create (IT/Admin) or edit (Admin) */}
       {canManage && (

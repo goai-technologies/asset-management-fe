@@ -73,14 +73,12 @@ function SidebarInner({
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
     <>
-      <div className="h-16 px-4 flex items-center gap-3 border-b border-sidebar-border">
-        <img
-          src="/assets/goai-logo.png"
-          alt="goAI"
-          className="h-9 w-auto max-w-[96px] shrink-0 rounded-md bg-white px-2 py-1 object-contain"
-        />
-        <div className="min-w-0">
-          <div className="font-bold leading-tight text-sm">Asset Management</div>
+      <div className="h-16 px-5 flex items-center gap-2 border-b border-sidebar-border">
+        <div className="h-9 w-9 rounded-md bg-primary text-primary-foreground grid place-items-center">
+          <Boxes className="h-5 w-5" />
+        </div>
+        <div>
+          <div className="font-bold leading-tight text-sm">goAI Asset Management</div>
           <div className="text-[10px] tracking-wide text-sidebar-foreground/60 leading-snug">Manage, Assign & Track Company Assets</div>
         </div>
       </div>
