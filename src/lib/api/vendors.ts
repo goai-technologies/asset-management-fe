@@ -10,6 +10,7 @@ function toCreateBody(vendor: Omit<Vendor, "id" | "vendor_code"> & { vendor_code
     email: vendor.email ?? "",
     phone: vendor.phone ?? "",
     address: vendor.office_address ?? "",
+    gstNumber: vendor.gst_number ?? "",
   };
 }
 
@@ -21,6 +22,7 @@ function toUpdateBody(updates: Partial<Omit<Vendor, "id">>) {
     email: updates.email ?? undefined,
     phone: updates.phone ?? undefined,
     address: updates.office_address ?? undefined,
+    gstNumber: updates.gst_number ?? undefined,
   };
 }
 

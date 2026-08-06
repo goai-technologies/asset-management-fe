@@ -32,6 +32,7 @@ type ApiVendor = {
   email: string;
   phone: string;
   address: string;
+  gstNumber: string;
   assetCount: number;
   createdAt: string;
   updatedAt: string;
@@ -170,7 +171,7 @@ export function mapVendor(api: ApiVendor): Vendor {
     vendor_type: "General Supplier",
     status: "active",
     website: null,
-    gst_number: null,
+    gst_number: api.gstNumber || null,
     notes: null,
   };
 }

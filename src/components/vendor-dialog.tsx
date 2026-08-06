@@ -69,8 +69,23 @@ export function VendorDialog({
     e.preventDefault();
     setSaving(true);
 
-    if (!form.vendor_name.trim()) {
-      toast.error("Please fill in the required field (Vendor Name)");
+    const missing: string[] = [];
+    if (!form.vendor_name.trim()) missing.push("Vendor Name");
+    if (!form.contact_person.trim()) missing.push("Contact Person");
+    if (!form.email.trim()) missing.push("Email Address");
+    if (!form.phone.trim()) missing.push("Phone Number");
+    if (!form.office_address.trim()) missing.push("Office Address");
+    if (!form.gst_number.trim()) missing.push("GST Number");
+
+    if (missing.length > 0) {
+      toast.error(`Please fill in required fields: ${missing.join(", ")}`);
+      setSaving(false);
+      return;
+    }
+
+    const phoneDigits = form.phone.replace(/\D/g, "");
+    if (phoneDigits.length < 10 || phoneDigits.length > 15) {
+      toast.error("Phone must be between 10 and 15 digits");
       setSaving(false);
       return;
     }
@@ -78,14 +93,14 @@ export function VendorDialog({
     try {
       const payload = {
         vendor_name: form.vendor_name.trim(),
-        contact_person: form.contact_person.trim() || null,
-        email: form.email.trim() || null,
-        phone: form.phone.trim() || null,
-        office_address: form.office_address.trim() || null,
+        contact_person: form.contact_person.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        office_address: form.office_address.trim(),
         vendor_type: form.vendor_type || null,
         status: form.status,
         website: form.website.trim() || null,
-        gst_number: form.gst_number.trim() || null,
+        gst_number: form.gst_number.trim(),
         notes: form.notes.trim() || null,
       };
 
@@ -121,14 +136,28 @@ export function VendorDialog({
           <Field label="Vendor Name" required className="sm:col-span-2">
             <Input value={form.vendor_name} required onChange={(e) => setForm({ ...form, vendor_name: e.target.value })} />
           </Field>
-          <Field label="Contact Person">
-            <Input value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} />
+          <Field label="Contact Person" required>
+            <Input
+              value={form.contact_person}
+              required
+              onChange={(e) => setForm({ ...form, contact_person: e.target.value })}
+            />
           </Field>
-          <Field label="Email Address">
-            <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <Field label="Email Address" required>
+            <Input
+              type="email"
+              value={form.email}
+              required
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
           </Field>
-          <Field label="Phone Number">
-            <Input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          <Field label="Phone Number" required>
+            <Input
+              type="tel"
+              value={form.phone}
+              required
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            />
           </Field>
           <Field label="Vendor Type">
             <Select value={form.vendor_type} onValueChange={(v) => setForm({ ...form, vendor_type: v })}>
@@ -140,9 +169,10 @@ export function VendorDialog({
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Office Address" className="sm:col-span-2">
+          <Field label="Office Address" required className="sm:col-span-2">
             <Textarea
               rows={2}
+              required
               placeholder="Street, city, state, postal code, country"
               value={form.office_address}
               onChange={(e) => setForm({ ...form, office_address: e.target.value })}
@@ -151,8 +181,12 @@ export function VendorDialog({
           <Field label="Website">
             <Input type="url" placeholder="https://example.com" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
           </Field>
-          <Field label="GST Number">
-            <Input value={form.gst_number} onChange={(e) => setForm({ ...form, gst_number: e.target.value })} />
+          <Field label="GST Number" required>
+            <Input
+              value={form.gst_number}
+              required
+              onChange={(e) => setForm({ ...form, gst_number: e.target.value })}
+            />
           </Field>
           {editing && (
             <Field label="Status">
