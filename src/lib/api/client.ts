@@ -2,9 +2,19 @@ import type { AuthSession } from "./auth-types";
 
 const TOKEN_KEY = "eams_auth_token";
 
+declare global {
+  interface Window {
+    /** Populated at container start by docker-entrypoint.sh from the runtime environment. */
+    __ENV__?: { VITE_API_URL?: string };
+  }
+}
+
 /** Express API base URL (e.g. http://localhost:5001/api). */
 export function getApiBaseUrl(): string {
-  const base = import.meta.env.VITE_API_URL ?? "http://localhost:5001/api";
+  const runtimeUrl =
+    typeof window !== "undefined" ? window.__ENV__?.VITE_API_URL : undefined;
+  const base =
+    runtimeUrl || import.meta.env.VITE_API_URL || "http://localhost:5001/api";
   return base.replace(/\/$/, "");
 }
 
