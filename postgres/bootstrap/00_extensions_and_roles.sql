@@ -1,5 +1,5 @@
 -- Standalone PostgreSQL bootstrap for goAI Asset Management
--- Run before applying supabase/migrations/*.sql
+-- Run before applying postgres/migrations/*.sql
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 

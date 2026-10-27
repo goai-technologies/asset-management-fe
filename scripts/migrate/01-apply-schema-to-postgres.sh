@@ -19,8 +19,8 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f postgres/bootstrap/00_extensions_and_
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f postgres/bootstrap/01_auth_compat.sql
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f postgres/bootstrap/02_auth_password.sql
 
-echo "==> Apply Supabase migrations (same schema)"
-for file in supabase/migrations/*.sql; do
+echo "==> Apply schema migrations (postgres/migrations)"
+for file in postgres/migrations/*.sql; do
   echo "    -> $file"
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$file"
 done

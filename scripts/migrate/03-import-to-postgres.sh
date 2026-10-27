@@ -92,7 +92,7 @@ echo "==> Apply public schema"
 if [[ -f "${IN_DIR}/public_schema.sql" ]]; then
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "${IN_DIR}/public_schema.sql"
 else
-  echo "No public_schema.sql — applying schema from supabase/migrations instead"
+  echo "No public_schema.sql — applying schema from postgres/migrations instead"
   bash scripts/migrate/01-apply-schema-to-postgres.sh
 fi
 
