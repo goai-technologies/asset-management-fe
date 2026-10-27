@@ -240,7 +240,7 @@ export function AssetDialog({
         return;
       }
     } else {
-      const validationErrors = validateAssetForm(form, { requireImages: true, imageCount: images.length });
+      const validationErrors = validateAssetForm(form, { requireImages: false, imageCount: images.length });
       if (Object.keys(validationErrors).length > 0) {
         setErrors(validationErrors);
         toast.error("Please complete all required fields before creating the asset.");
@@ -366,7 +366,7 @@ export function AssetDialog({
             </Field>
           </div>
           <div className="md:col-span-2 border-t pt-4">
-            <Field label="Asset Image" required={!editing} error={errors.images}>
+            <Field label="Asset Image" error={errors.images}>
               <AssetImageUpload value={images} onChange={updateImages} />
             </Field>
           </div>
