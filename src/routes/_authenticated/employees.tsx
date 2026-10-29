@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { Plus, Search, Download, Users, History, Wrench } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { RefreshCw, Search, Download, Users, History, Wrench } from "lucide-react";
+import { toast } from "sonner";
 import { useSession, useRoles } from "@/hooks/use-auth";
 import { useEmployeeRows, useEmployeeAssignedAssets, useEmployeeAssignments, useEmployeeRepairHistory, useInvalidateAssetData } from "@/hooks/use-asset-management";
 import { PageHeader } from "@/components/page-header";
@@ -14,6 +15,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { shortDate, dateTime } from "@/lib/format";
 import { downloadCSV } from "@/lib/csv";
 import {
@@ -22,7 +32,7 @@ import {
   handleClickableRowKeyDown,
 } from "@/lib/clickable-table-row";
 import type { EmployeeRow } from "@/lib/types/asset-management";
-import { EmployeeDialog } from "@/components/employee-dialog";
+import { syncEmployeesFromZoho } from "@/lib/api/employees";
 import { EmployeeActionsMenu, type EmployeeDetailsTab } from "@/components/employee-actions-menu";
 import { DeleteEmployeeDialog } from "@/components/delete-employee-dialog";
 
@@ -31,6 +41,21 @@ export const Route = createFileRoute("/_authenticated/employees")({
 });
 
 const EMPLOYEE_STATUSES = ["active", "inactive"] as const;
+const PAGE_SIZE = 10;
+
+function getPageItems(current: number, total: number): Array<number | "ellipsis"> {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  const items: Array<number | "ellipsis"> = [1];
+  if (current > 3) items.push("ellipsis");
+  for (let page = Math.max(2, current - 1); page <= Math.min(total - 1, current + 1); page += 1) {
+    items.push(page);
+  }
+  if (current < total - 2) items.push("ellipsis");
+  items.push(total);
+  return items;
+}
 
 function EmployeesPage() {
   const { user } = useSession();
@@ -41,16 +66,31 @@ function EmployeesPage() {
     void refetch();
     invalidateAssetData();
   };
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<EmployeeRow | null>(null);
   const [viewEmployee, setViewEmployee] = useState<EmployeeRow | null>(null);
   const [viewTab, setViewTab] = useState<EmployeeDetailsTab>("general");
   const [deleteEmployee, setDeleteEmployee] = useState<EmployeeRow | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [q, setQ] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [locationFilter, setLocationFilter] = useState("all");
+  const [page, setPage] = useState(1);
+
+  const handleSyncFromZoho = async () => {
+    setSyncing(true);
+    try {
+      const result = await syncEmployeesFromZoho();
+      toast.success(
+        `Synced ${result.total} employees from Zoho (${result.created} created, ${result.updated} updated, ${result.deactivated} deactivated).`,
+      );
+      triggerRefresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to sync employees from Zoho");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const departments = useMemo(
     () => [...new Set(employees.map((e) => e.department).filter(Boolean))] as string[],
@@ -72,6 +112,23 @@ function EmployeesPage() {
         .some((v) => v?.toLowerCase().includes(needle));
     });
   }, [employees, q, departmentFilter, statusFilter, locationFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [q, departmentFilter, statusFilter, locationFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const pageEnd = Math.min(currentPage * PAGE_SIZE, filtered.length);
+  const paged = useMemo(
+    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filtered, currentPage],
+  );
+  const pageItems = useMemo(
+    () => getPageItems(currentPage, totalPages),
+    [currentPage, totalPages],
+  );
 
   const openEmployeeDetails = (employee: EmployeeRow, tab: EmployeeDetailsTab = "general") => {
     setViewEmployee(employee);
@@ -96,12 +153,13 @@ function EmployeesPage() {
     <div>
       <PageHeader
         title="Employees"
-        description="Manage company employees, assignments, and contact information."
+        description="Employees sync from Zoho People. Assign assets and view history here."
         actions={
           <>
             {canManage && (
-              <Button onClick={() => { setEditing(null); setDialogOpen(true); }}>
-                <Plus className="h-4 w-4 mr-2" />Add Employee
+              <Button onClick={() => void handleSyncFromZoho()} disabled={syncing}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
+                {syncing ? "Syncing…" : "Sync from Zoho"}
               </Button>
             )}
             <Button variant="outline" onClick={exportCSV} title="Export CSV">
@@ -159,9 +217,9 @@ function EmployeesPage() {
                 title="No employees found"
                 description={q || departmentFilter !== "all" || statusFilter !== "all" || locationFilter !== "all"
                   ? "Try adjusting your filters or search terms."
-                  : "Get started by adding your first employee."}
-                actionLabel={canManage && !q ? "Add Employee" : undefined}
-                onAction={() => { setEditing(null); setDialogOpen(true); }}
+                  : "Sync employees from Zoho People to get started."}
+                actionLabel={canManage && !q ? "Sync from Zoho" : undefined}
+                onAction={() => { void handleSyncFromZoho(); }}
               />
             </div>
           ) : (
@@ -181,7 +239,7 @@ function EmployeesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((e) => (
+                {paged.map((e) => (
                   <TableRow
                     key={e.id}
                     tabIndex={0}
@@ -215,9 +273,10 @@ function EmployeesPage() {
                       <EmployeeActionsMenu
                         employee={e}
                         canManage={canManage}
+                        allowEdit={false}
                         onViewDetails={() => openEmployeeDetails(e)}
                         onViewAssignedAssets={() => openEmployeeDetails(e, "assets")}
-                        onEdit={() => { setEditing(e); setDialogOpen(true); }}
+                        onEdit={() => undefined}
                         onDelete={() => { setDeleteEmployee(e); setDeleteOpen(true); }}
                       />
                     </TableCell>
@@ -227,19 +286,60 @@ function EmployeesPage() {
             </Table>
           )}
         </CardContent>
+        {filtered.length > 0 && (
+          <div className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Showing {pageStart}–{pageEnd} of {filtered.length}
+            </p>
+            <Pagination className="mx-0 w-full justify-start sm:w-auto sm:justify-end">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    aria-disabled={currentPage <= 1}
+                    className={currentPage <= 1 ? "pointer-events-none opacity-50" : undefined}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (currentPage > 1) setPage(currentPage - 1);
+                    }}
+                  />
+                </PaginationItem>
+                {pageItems.map((item, index) =>
+                  item === "ellipsis" ? (
+                    <PaginationItem key={`ellipsis-${index}`}>
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  ) : (
+                    <PaginationItem key={item}>
+                      <PaginationLink
+                        href="#"
+                        isActive={item === currentPage}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setPage(item);
+                        }}
+                      >
+                        {item}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ),
+                )}
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    aria-disabled={currentPage >= totalPages}
+                    className={currentPage >= totalPages ? "pointer-events-none opacity-50" : undefined}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (currentPage < totalPages) setPage(currentPage + 1);
+                    }}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
       </Card>
-
-      {canManage && (
-        <EmployeeDialog
-          open={dialogOpen}
-          onOpenChange={(open) => {
-            setDialogOpen(open);
-            if (!open) setEditing(null);
-          }}
-          editing={editing}
-          onSaved={triggerRefresh}
-        />
-      )}
 
       <DeleteEmployeeDialog
         open={deleteOpen}
