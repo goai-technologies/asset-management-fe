@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { Plus, Search, Download, Trash2, ArrowLeftRight, Boxes, History, UserPlus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, Search, Download, Trash2, ArrowLeftRight, Boxes, History } from "lucide-react";
 import { useSession, useRoles } from "@/hooks/use-auth";
 import { useAssets, useCategories, useAssetAssignments, useSoftDeleteAssetMutation, useInvalidateAssetData } from "@/hooks/use-asset-management";
 import { PageHeader } from "@/components/page-header";
@@ -14,6 +14,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { toast } from "sonner";
 import { currencyINR, shortDate, dateTime } from "@/lib/format";
 import { downloadCSV } from "@/lib/csv";
@@ -24,7 +33,6 @@ import {
 } from "@/lib/clickable-table-row";
 import type { AssetRow } from "@/lib/types/asset-management";
 import { AssetDialog } from "@/components/asset-dialog";
-import { EmployeeDialog } from "@/components/employee-dialog";
 import { AssignDialog } from "@/components/assign-dialog";
 import { UnassignAssetDialog } from "@/components/unassign-asset-dialog";
 import { DisposeAssetDialog } from "@/components/dispose-asset-dialog";
@@ -39,6 +47,21 @@ export const Route = createFileRoute("/_authenticated/assets")({
 });
 
 const STATUSES = ["available","assigned","reserved","repair","lost","inactive","disposed","retired"] as const;
+const PAGE_SIZE = 10;
+
+function getPageItems(current: number, total: number): Array<number | "ellipsis"> {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  const items: Array<number | "ellipsis"> = [1];
+  if (current > 3) items.push("ellipsis");
+  for (let page = Math.max(2, current - 1); page <= Math.min(total - 1, current + 1); page += 1) {
+    items.push(page);
+  }
+  if (current < total - 2) items.push("ellipsis");
+  items.push(total);
+  return items;
+}
 
 function AssetsPage() {
   const { user } = useSession();
@@ -47,9 +70,9 @@ function AssetsPage() {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
   
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [employeeOpen, setEmployeeOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [unassignOpen, setUnassignOpen] = useState(false);
   const [editing, setEditing] = useState<AssetRow | null>(null);
@@ -86,11 +109,34 @@ function AssetsPage() {
     });
   }, [assets, q, statusFilter, categoryFilter]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [q, statusFilter, categoryFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const pageEnd = Math.min(currentPage * PAGE_SIZE, filtered.length);
+  const paged = useMemo(
+    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filtered, currentPage],
+  );
+  const pageItems = useMemo(
+    () => getPageItems(currentPage, totalPages),
+    [currentPage, totalPages],
+  );
+  const allPageSelected =
+    paged.length > 0 && paged.every((asset) => selectedIds.has(asset.id));
+
   const toggleSelectAll = () => {
-    if (selectedIds.size === filtered.length) {
-      setSelectedIds(new Set());
+    if (allPageSelected) {
+      const next = new Set(selectedIds);
+      for (const asset of paged) next.delete(asset.id);
+      setSelectedIds(next);
     } else {
-      setSelectedIds(new Set(filtered.map(a => a.id)));
+      const next = new Set(selectedIds);
+      for (const asset of paged) next.add(asset.id);
+      setSelectedIds(next);
     }
   };
 
@@ -116,6 +162,10 @@ function AssetsPage() {
   };
 
   const exportCSV = () => {
+    if (filtered.length === 0) {
+      toast.error("No assets available to download.");
+      return;
+    }
     downloadCSV("assets", filtered.map((a) => ({
       code: a.asset_code, name: a.asset_name, category: a.categories?.category_name ?? "",
       brand: a.brand ?? "", model: a.model ?? "", serial: a.serial_number ?? "", status: a.status,
@@ -137,19 +187,26 @@ function AssetsPage() {
               <Button onClick={() => { setEditing(null); setDialogOpen(true); }}>
                 <Plus className="h-4 w-4 mr-2" />Add Asset
               </Button>
-              <Button variant="outline" onClick={() => setEmployeeOpen(true)}>
-                <UserPlus className="h-4 w-4 mr-2" />Add Employee
-              </Button>
               <Button variant="outline" onClick={() => setAssignOpen(true)}>
                 <ArrowLeftRight className="h-4 w-4 mr-2" />Assign Asset
               </Button>
-              <Button variant="outline" onClick={exportCSV} title="Export CSV">
+              <Button
+                variant="outline"
+                onClick={exportCSV}
+                disabled={filtered.length === 0}
+                title={filtered.length === 0 ? "No assets available to download" : "Export CSV"}
+              >
                 <Download className="h-4 w-4 mr-2" />CSV
               </Button>
             </>
           ) : (
             <>
-              <Button variant="outline" onClick={exportCSV} title="Export CSV">
+              <Button
+                variant="outline"
+                onClick={exportCSV}
+                disabled={filtered.length === 0}
+                title={filtered.length === 0 ? "No assets available to download" : "Export CSV"}
+              >
                 <Download className="h-4 w-4 mr-2" />CSV
               </Button>
             </>
@@ -210,7 +267,7 @@ function AssetsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-12 text-center">
-                    <Checkbox checked={selectedIds.size === filtered.length && filtered.length > 0} onCheckedChange={toggleSelectAll} />
+                    <Checkbox checked={allPageSelected} onCheckedChange={toggleSelectAll} />
                   </TableHead>
                   <TableHead>Asset ID</TableHead>
                   <TableHead>Asset Name</TableHead>
@@ -224,7 +281,7 @@ function AssetsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((a) => (
+                {paged.map((a) => (
                   <TableRow
                     key={a.id}
                     tabIndex={0}
@@ -278,6 +335,59 @@ function AssetsPage() {
             </Table>
           )}
         </CardContent>
+        {filtered.length > 0 && (
+          <div className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Showing {pageStart}–{pageEnd} of {filtered.length}
+            </p>
+            <Pagination className="mx-0 w-full justify-start sm:w-auto sm:justify-end">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    aria-disabled={currentPage <= 1}
+                    className={currentPage <= 1 ? "pointer-events-none opacity-50" : undefined}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (currentPage > 1) setPage(currentPage - 1);
+                    }}
+                  />
+                </PaginationItem>
+                {pageItems.map((item, index) =>
+                  item === "ellipsis" ? (
+                    <PaginationItem key={`ellipsis-${index}`}>
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  ) : (
+                    <PaginationItem key={item}>
+                      <PaginationLink
+                        href="#"
+                        isActive={item === currentPage}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setPage(item);
+                        }}
+                      >
+                        {item}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ),
+                )}
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    aria-disabled={currentPage >= totalPages}
+                    className={currentPage >= totalPages ? "pointer-events-none opacity-50" : undefined}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      if (currentPage < totalPages) setPage(currentPage + 1);
+                    }}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
       </Card>
 
       {/* Asset Dialog — create (IT/Admin) or edit (Admin) */}
@@ -293,14 +403,6 @@ function AssetsPage() {
         />
       )}
       
-      {canManage && (
-        <EmployeeDialog
-          open={employeeOpen}
-          onOpenChange={setEmployeeOpen}
-          onSaved={triggerRefresh}
-        />
-      )}
-
       {/* Assign Dialog */}
       <AssignDialog 
         open={assignOpen} 

@@ -15,6 +15,7 @@ export type EmployeeDetailsTab = "general" | "assets" | "history" | "repairs";
 export function EmployeeActionsMenu({
   employee,
   canManage,
+  allowEdit = false,
   onViewDetails,
   onViewAssignedAssets,
   onEdit,
@@ -22,6 +23,8 @@ export function EmployeeActionsMenu({
 }: {
   employee: EmployeeRow;
   canManage: boolean;
+  /** Manual edit is disabled when employees are synced from Zoho People. */
+  allowEdit?: boolean;
   onViewDetails: () => void;
   onViewAssignedAssets: () => void;
   onEdit: () => void;
@@ -40,7 +43,7 @@ export function EmployeeActionsMenu({
         <DropdownMenuItem onClick={onViewAssignedAssets}>
           <Boxes className="h-4 w-4 mr-2" /> View Assigned Assets
         </DropdownMenuItem>
-        {canManage && (
+        {canManage && allowEdit && (
           <DropdownMenuItem onClick={onEdit}>
             <Pencil className="h-4 w-4 mr-2" /> Edit Employee
           </DropdownMenuItem>

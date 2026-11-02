@@ -63,3 +63,14 @@ export async function deleteEmployee(id: string): Promise<void> {
 export async function deactivateEmployee(id: string): Promise<void> {
   await apiPost(`/employees/${id}/deactivate`);
 }
+
+export interface EmployeeSyncResult {
+  created: number;
+  updated: number;
+  deactivated: number;
+  total: number;
+}
+
+export async function syncEmployeesFromZoho(): Promise<EmployeeSyncResult> {
+  return apiPost<EmployeeSyncResult>("/employees/sync");
+}
